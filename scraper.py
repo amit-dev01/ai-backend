@@ -1,63 +1,57 @@
 """
 Scraper module for Competitor Analysis AI.
 
-Uses Crawl4AI's AsyncWebCrawler to scrape competitor websites and social media
-profiles asynchronously. Social scraping is best-effort — most platforms block
-automated access.
+Uses Jina Reader (r.jina.ai) to scrape competitor websites and social media
+profiles. Jina handles JavaScript rendering on their servers — no browser
+or Playwright needed.
 """
 
 import logging
-from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, BrowserConfig
+import httpx
 
 logger = logging.getLogger(__name__)
 
+JINA_BASE = "https://r.jina.ai/"
+
+HEADERS = {
+    "Accept": "text/markdown",
+    "X-Return-Format": "markdown",
+}
+
 
 async def scrape_website(url: str) -> str:
-    """Scrape a competitor's website and return the content as Markdown.
+    """Scrape a competitor's website via Jina Reader and return Markdown.
 
     Args:
         url: The full URL of the website to scrape.
 
     Returns:
-        The scraped page content converted to Markdown.
+        The scraped page content as Markdown.
 
     Raises:
-        Exception: If the crawl fails or returns no content.
+        Exception: If the request fails or returns no content.
     """
-    logger.info("Starting website scrape: %s", url)
+    logger.info("Starting website scrape via Jina: %s", url)
 
-    config = CrawlerRunConfig(
-        word_count_threshold=10,
-        exclude_external_links=True,
-        remove_overlay_elements=True,
-        process_iframes=False,
+    jina_url = f"{JINA_BASE}{url}"
+
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        response = await client.get(jina_url, headers=HEADERS)
+        response.raise_for_status()
+
+    content = response.text.strip()
+
+    if not content:
+        raise Exception(f"Jina returned empty content for {url}")
+
+    logger.info(
+        "Website scrape complete: %s — %d characters extracted", url, len(content)
     )
-
-    browser_config = BrowserConfig(browser_type="chromium", channel="msedge")
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        result = await crawler.arun(url=url, config=config)
-
-        if not result.success:
-            error_msg = f"Failed to scrape {url}: {result.error_message}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-
-        markdown_content = result.markdown or ""
-        if not markdown_content.strip():
-            error_msg = f"Scrape returned empty content for {url}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-
-        logger.info(
-            "Website scrape complete: %s — %d characters extracted",
-            url,
-            len(markdown_content),
-        )
-        return markdown_content
+    return content
 
 
 async def scrape_social(url: str) -> str:
-    """Best-effort scrape of a social media profile page.
+    """Best-effort scrape of a social media profile page via Jina Reader.
 
     Most social platforms block automated scraping, so this function
     catches all exceptions and returns an empty string on failure.
@@ -68,31 +62,25 @@ async def scrape_social(url: str) -> str:
     Returns:
         Up to 5000 characters of Markdown content, or an empty string on failure.
     """
-    logger.info("Attempting social scrape: %s", url)
+    logger.info("Attempting social scrape via Jina: %s", url)
 
     try:
-        config = CrawlerRunConfig(
-            word_count_threshold=10,
-            exclude_external_links=True,
-            remove_overlay_elements=True,
-            process_iframes=False,
+        jina_url = f"{JINA_BASE}{url}"
+
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            response = await client.get(jina_url, headers=HEADERS)
+            response.raise_for_status()
+
+        content = response.text.strip()[:5000]
+
+        if not content:
+            logger.warning("Jina returned no content for %s", url)
+            return ""
+
+        logger.info(
+            "Social scrape complete: %s — %d characters extracted", url, len(content)
         )
-
-        browser_config = BrowserConfig(browser_type="chromium", channel="msedge")
-        async with AsyncWebCrawler(config=browser_config) as crawler:
-            result = await crawler.arun(url=url, config=config)
-
-            if not result.success or not result.markdown:
-                logger.warning("Social scrape returned no content for %s", url)
-                return ""
-
-            content = result.markdown[:5000]
-            logger.info(
-                "Social scrape complete: %s — %d characters extracted",
-                url,
-                len(content),
-            )
-            return content
+        return content
 
     except Exception as e:
         logger.warning("Social scrape failed for %s: %s", url, str(e))
