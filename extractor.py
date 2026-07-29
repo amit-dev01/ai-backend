@@ -35,8 +35,9 @@ async def extract_signals(scraped_text: str, company_name: str) -> dict:
     """
     logger.info("Starting signal extraction for %s", company_name)
 
-    # Cap content to avoid token limits
-    capped_content = scraped_text[:50000]
+    # Cap content to stay within Groq free-tier TPM limits (~6000 TPM)
+    # ~8000 chars ≈ ~2000 tokens, leaving room for prompt + response
+    capped_content = scraped_text[:8000]
 
     user_prompt = EXTRACTION_PROMPT.format(scraped_content=capped_content)
 
