@@ -1,0 +1,58 @@
+"""
+Pydantic models for Competitor Analysis AI.
+
+Defines the request schema (CompetitorRequest), intermediate data structures
+(DataPoint), and the full response schema (CompetitorReport).
+"""
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, HttpUrl, Field
+
+
+class CompetitorRequest(BaseModel):
+    """Incoming request payload for competitor analysis."""
+
+    company_name: str = Field(..., description="Name of the competitor company to analyze.")
+    website_url: HttpUrl = Field(..., description="Primary website URL of the competitor.")
+    industry: str = Field(..., description="Industry or vertical the competitor operates in.")
+    our_company_context: str = Field(
+        default="We are a similar business competing in the same market.",
+        description="Brief description of our own company for contextual analysis.",
+    )
+    social_urls: dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional mapping of platform name to social profile URL.",
+    )
+    focus_areas: list[str] = Field(
+        default=["products", "pricing", "positioning", "social", "seo"],
+        description="Aspects of the competitor to focus the analysis on.",
+    )
+
+
+class DataPoint(BaseModel):
+    """A single extracted data point from scraped content."""
+
+    category: str = Field(..., description="Category of the data point (e.g., 'pricing', 'product').")
+    key: str = Field(..., description="Specific attribute name.")
+    value: str = Field(..., description="Extracted value.")
+    source: str = Field(..., description="URL or source the data was extracted from.")
+    confidence: str = Field(..., description="Confidence level: high, medium, or low.")
+
+
+class CompetitorReport(BaseModel):
+    """Full competitor intelligence report returned by the API."""
+
+    company_name: str
+    executive_summary: str
+    snapshot: dict[str, str]
+    strengths: list[str]
+    weaknesses: list[str]
+    opportunities: list[str]
+    threats: list[str]
+    swot: dict[str, list[str]]
+    next_steps: list[dict[str, Any]]
+    differentiation_strategy: str
+    full_markdown_report: str
+    generated_at: datetime
