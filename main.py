@@ -27,6 +27,7 @@ from models import CompetitorRequest, CompetitorReport
 from scraper import scrape_website, scrape_social
 from extractor import extract_signals
 from analyzer import analyze_competitor, format_report
+from database import save_competitor_and_report
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -149,9 +150,19 @@ async def analyze(req: CompetitorRequest) -> CompetitorReport:
         report_filename = f"{slug}_{timestamp}.md"
         report_path = REPORTS_DIR / report_filename
         report_path.write_text(markdown_report, encoding="utf-8")
-        logger.info("Report saved: %s", report_path)
+        logger.info("Report saved to disk: %s", report_path)
 
-        # --- 8. Build response ------------------------------------------------
+        # --- 8. Save report & competitor to Supabase --------------------------
+        db_saved = await save_competitor_and_report(
+            req_data=request_data,
+            extracted=extracted,
+            analysis=analysis,
+            markdown_report=markdown_report,
+        )
+        if db_saved:
+            logger.info("Saved to Supabase: competitor_id=%s, report_id=%s", db_saved.get("competitor_id"), db_saved.get("report_id"))
+
+        # --- 9. Build response ------------------------------------------------
         report = CompetitorReport(
             company_name=req.company_name,
             executive_summary=analysis.get("executive_summary", ""),
