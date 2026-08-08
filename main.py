@@ -28,12 +28,14 @@ from models import (
     CompetitorReport, 
     CompanyProfilePayload, 
     CompanyProfileResponse, 
-    CompanyProfileResponseCompany
+    CompanyProfileResponseCompany,
+    AuthRequest,
+    AuthResponse
 )
 from scraper import scrape_website, scrape_social
 from extractor import extract_signals
 from analyzer import analyze_competitor, format_report
-from database import save_competitor_and_report, get_company_profile, upsert_company_profile
+from database import save_competitor_and_report, get_company_profile, upsert_company_profile, supabase_client
 from auth import get_current_user
 
 # ---------------------------------------------------------------------------
@@ -96,6 +98,57 @@ def _slugify(text: str) -> str:
 async def health_check() -> dict:
     """Health-check endpoint returning service status."""
     return {"status": "ok", "service": "competitor-analysis-ai"}
+
+
+# ---------------------------------------------------------------------------
+# Auth Routes
+# ---------------------------------------------------------------------------
+
+@app.post("/api/auth/signup", response_model=AuthResponse)
+async def signup(req: AuthRequest) -> AuthResponse:
+    """Register a new user using Supabase Auth."""
+    if not supabase_client:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+        
+    try:
+        response = supabase_client.auth.sign_up({
+            "email": req.email,
+            "password": req.password
+        })
+        if not response or not response.user or not response.session:
+            raise HTTPException(status_code=400, detail="Signup failed or email confirmation required.")
+            
+        return AuthResponse(
+            access_token=response.session.access_token,
+            user_id=response.user.id,
+            email=response.user.email
+        )
+    except Exception as exc:
+        logger.error(f"Signup error: {str(exc)}")
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.post("/api/auth/login", response_model=AuthResponse)
+async def login(req: AuthRequest) -> AuthResponse:
+    """Login an existing user using Supabase Auth."""
+    if not supabase_client:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+        
+    try:
+        response = supabase_client.auth.sign_in_with_password({
+            "email": req.email,
+            "password": req.password
+        })
+        if not response or not response.session or not response.user:
+            raise HTTPException(status_code=401, detail="Invalid credentials.")
+            
+        return AuthResponse(
+            access_token=response.session.access_token,
+            user_id=response.user.id,
+            email=response.user.email
+        )
+    except Exception as exc:
+        logger.error(f"Login error: {str(exc)}")
+        raise HTTPException(status_code=401, detail="Invalid credentials.")
 
 
 @app.get("/api/company/profile", response_model=CompanyProfileResponse)

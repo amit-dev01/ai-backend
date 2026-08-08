@@ -89,3 +89,17 @@ class CompanyProfileResponse(BaseModel):
     """Response showing if setup is complete, and basic company details if so."""
     setupCompleted: bool
     company: Optional[CompanyProfileResponseCompany] = None
+
+
+# --- Auth Models ---
+
+class AuthRequest(BaseModel):
+    email: str = Field(..., description="User's email address")
+    password: str = Field(..., description="User's password")
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user_id: str
+    email: str
+
