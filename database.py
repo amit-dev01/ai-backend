@@ -142,3 +142,81 @@ async def save_competitor_and_report(
     except Exception as exc:
         logger.exception("Failed to save data to Supabase: %s", str(exc))
         return None
+
+def get_company_profile(user_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch the company profile for the authenticated user."""
+    if not supabase_client:
+        return None
+        
+    try:
+        response = (
+            supabase_client.table("companies")
+            .select("*")
+            .eq("owner_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if response and response.data:
+            return response.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to fetch company profile: %s", str(exc))
+        return None
+
+def upsert_company_profile(user_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Insert or update the company profile for a user."""
+    if not supabase_client:
+        return None
+        
+    payload = {
+        "owner_id": user_id,
+        "company_name": data.get("companyName"),
+        "website": str(data.get("website")),
+        "industry": data.get("industry"),
+        "description": data.get("description"),
+        "products_or_services": data.get("productsOrServices", []),
+        "target_customers": data.get("targetCustomers"),
+        "company_stage": data.get("companyStage"),
+        "company_size": data.get("companySize"),
+        "excluded_competitors": data.get("excludedCompetitors", []),
+        "onboarding_completed": True
+    }
+    
+    try:
+        existing = get_company_profile(user_id)
+        
+        if existing:
+            response = (
+                supabase_client.table("companies")
+                .update(payload)
+                .eq("owner_id", user_id)
+                .execute()
+            )
+        else:
+            response = (
+                supabase_client.table("companies")
+                .insert(payload)
+                .execute()
+            )
+            
+        if response and response.data:
+            company_data = response.data[0]
+            company_id = company_data.get("id")
+            
+            # Save competitors if provided
+            competitors = data.get("competitors", [])
+            if competitors and company_id:
+                for comp in competitors:
+                    comp_payload = {
+                        "company_id": company_id,
+                        "name": comp.get("name"),
+                        "website_url": comp.get("website"),
+                        "source": "MANUAL"
+                    }
+                    supabase_client.table("competitors").insert(comp_payload).execute()
+
+            return company_data
+        return None
+    except Exception as exc:
+        logger.exception("Failed to upsert company profile: %s", str(exc))
+        return None

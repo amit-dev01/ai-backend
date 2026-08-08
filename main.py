@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import sys
@@ -23,11 +23,18 @@ import sys
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from models import CompetitorRequest, CompetitorReport
+from models import (
+    CompetitorRequest, 
+    CompetitorReport, 
+    CompanyProfilePayload, 
+    CompanyProfileResponse, 
+    CompanyProfileResponseCompany
+)
 from scraper import scrape_website, scrape_social
 from extractor import extract_signals
 from analyzer import analyze_competitor, format_report
-from database import save_competitor_and_report
+from database import save_competitor_and_report, get_company_profile, upsert_company_profile
+from auth import get_current_user
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -89,6 +96,48 @@ def _slugify(text: str) -> str:
 async def health_check() -> dict:
     """Health-check endpoint returning service status."""
     return {"status": "ok", "service": "competitor-analysis-ai"}
+
+
+@app.get("/api/company/profile", response_model=CompanyProfileResponse)
+async def get_company_status(user_id: str = Depends(get_current_user)) -> CompanyProfileResponse:
+    """Check if the user has completed company setup and return profile."""
+    company_data = get_company_profile(user_id)
+    if not company_data:
+        return CompanyProfileResponse(setupCompleted=False, company=None)
+        
+    return CompanyProfileResponse(
+        setupCompleted=True,
+        company=CompanyProfileResponseCompany(
+            id=str(company_data.get("id", "")),
+            companyName=company_data.get("company_name", ""),
+            website=company_data.get("website", ""),
+            industry=company_data.get("industry", "")
+        )
+    )
+
+
+@app.post("/api/company/profile", response_model=CompanyProfileResponse)
+async def submit_company_profile(
+    payload: CompanyProfilePayload,
+    user_id: str = Depends(get_current_user)
+) -> CompanyProfileResponse:
+    """Submit or update the company profile."""
+    data = payload.model_dump()
+    data["website"] = str(data["website"])
+    
+    company_data = upsert_company_profile(user_id, data)
+    if not company_data:
+        raise HTTPException(status_code=500, detail="Failed to save company profile.")
+        
+    return CompanyProfileResponse(
+        setupCompleted=True,
+        company=CompanyProfileResponseCompany(
+            id=str(company_data.get("id", "")),
+            companyName=company_data.get("company_name", ""),
+            website=company_data.get("website", ""),
+            industry=company_data.get("industry", "")
+        )
+    )
 
 
 @app.post("/analyze", response_model=CompetitorReport)

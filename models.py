@@ -6,7 +6,7 @@ Defines the request schema (CompetitorRequest), intermediate data structures
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, HttpUrl, Field
 
@@ -56,3 +56,36 @@ class CompetitorReport(BaseModel):
     differentiation_strategy: str
     full_markdown_report: str
     generated_at: datetime
+
+
+# --- Onboarding Models ---
+
+class CompetitorManual(BaseModel):
+    """A manual competitor entry provided by the user."""
+    name: str
+    website: Optional[str] = None
+
+class CompanyProfilePayload(BaseModel):
+    """Payload for submitting or updating a company profile."""
+    companyName: str = Field(..., description="Name of the company")
+    website: HttpUrl = Field(..., description="Company website URL")
+    industry: str = Field(..., description="Industry the company operates in")
+    description: str = Field(..., description="Description of the company")
+    productsOrServices: list[str] = Field(..., description="List of products or services")
+    targetCustomers: str = Field(..., description="Information about target customers or market")
+    
+    companyStage: Optional[str] = Field(None, description="Current stage of the company")
+    companySize: Optional[str] = Field(None, description="Size of the company")
+    competitors: Optional[list[CompetitorManual]] = Field(None, description="List of known competitors")
+    excludedCompetitors: Optional[list[str]] = Field(None, description="Competitors to exclude from analysis")
+
+class CompanyProfileResponseCompany(BaseModel):
+    id: str
+    companyName: str
+    website: str
+    industry: str
+
+class CompanyProfileResponse(BaseModel):
+    """Response showing if setup is complete, and basic company details if so."""
+    setupCompleted: bool
+    company: Optional[CompanyProfileResponseCompany] = None
