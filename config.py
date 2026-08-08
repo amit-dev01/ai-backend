@@ -17,6 +17,11 @@ EXTRACTION_MODEL: str = os.getenv("EXTRACTION_MODEL", "llama-3.1-8b-instant")
 
 SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
+SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", SUPABASE_KEY)
+JINA_API_KEY: str = os.getenv("JINA_API_KEY", "")
+
+EXA_API_KEY: str = os.getenv("EXA_API_KEY", "")
+SERPER_API_KEY: str = os.getenv("SERPER_API_KEY", "")
 
 if not GROQ_API_KEY:
     raise ValueError(

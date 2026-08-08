@@ -84,6 +84,10 @@ class CompanyProfileResponseCompany(BaseModel):
     companyName: str
     website: str
     industry: str
+    setupStatus: Optional[str] = None
+    executiveBrief: Optional[str] = None
+    mainThreats: Optional[list[str]] = None
+    keyOpportunity: Optional[str] = None
 
 class CompanyProfileResponse(BaseModel):
     """Response showing if setup is complete, and basic company details if so."""
@@ -103,3 +107,46 @@ class AuthResponse(BaseModel):
     user_id: str
     email: str
 
+
+# --- Discovery Pipeline Models ---
+
+class SetupStatusResponse(BaseModel):
+    """Response for GET /api/company/setup-status."""
+    status: str
+    progress: int
+    currentStep: Optional[str] = None
+    completedAt: Optional[str] = None
+    error: Optional[str] = None
+
+
+class CompetitorOut(BaseModel):
+    """Serialised competitor row returned by the API."""
+    id: str
+    name: str
+    website: Optional[str] = None
+    description: Optional[str] = None
+    type: Optional[str] = None
+    source: Optional[str] = None
+    competitiveScore: Optional[int] = None
+    confidenceScore: Optional[int] = None
+    productSimilarity: Optional[int] = None
+    customerOverlap: Optional[int] = None
+    marketOverlap: Optional[int] = None
+    businessModelOverlap: Optional[int] = None
+    reason: Optional[str] = None
+    isAccepted: Optional[bool] = None
+
+
+class CompetitorsListResponse(BaseModel):
+    """Response for GET /api/competitors."""
+    competitors: list[CompetitorOut]
+    total: int
+    direct: int
+    indirect: int
+    emerging: int
+
+
+class ManualCompetitorRequest(BaseModel):
+    """Body for POST /api/competitors/manual."""
+    name: str = Field(..., description="Name of the competitor")
+    website: str = Field(..., description="Website URL of the competitor")

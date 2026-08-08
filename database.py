@@ -163,6 +163,50 @@ def get_company_profile(user_id: str) -> Optional[Dict[str, Any]]:
         logger.exception("Failed to fetch company profile: %s", str(exc))
         return None
 
+
+def get_company_profile_by_id(company_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch the company profile by company UUID."""
+    if not supabase_client:
+        return None
+
+    try:
+        response = (
+            supabase_client.table("companies")
+            .select("*")
+            .eq("id", company_id)
+            .limit(1)
+            .execute()
+        )
+        if response and response.data:
+            return response.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to fetch company profile by id %s: %s", company_id, str(exc))
+        return None
+
+
+def save_manual_competitor(company_id: str, name: str, website_url: str) -> Optional[Dict[str, Any]]:
+    """Save a manually added competitor with source=MANUAL and is_accepted=True."""
+    if not supabase_client:
+        return None
+
+    payload = {
+        "company_id": company_id,
+        "name": name,
+        "website_url": website_url,
+        "source": "MANUAL",
+        "is_accepted": True,
+    }
+
+    try:
+        result = supabase_client.table("competitors").insert(payload).execute()
+        if result and result.data:
+            return result.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to save manual competitor '%s': %s", name, str(exc))
+        return None
+
 def upsert_company_profile(user_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Insert or update the company profile for a user."""
     if not supabase_client:
@@ -220,3 +264,212 @@ def upsert_company_profile(user_id: str, data: Dict[str, Any]) -> Optional[Dict[
     except Exception as exc:
         logger.exception("Failed to upsert company profile: %s", str(exc))
         return None
+
+
+# ---------------------------------------------------------------------------
+# Discovery pipeline helpers — added for competitor discovery feature
+# ---------------------------------------------------------------------------
+
+def update_company_setup_status(
+    company_id: str,
+    status: str,
+    progress: int,
+    current_step: str,
+    **kwargs: Any,
+) -> bool:
+    """Update setup status fields on the companies table.
+
+    Args:
+        company_id: The UUID of the company row to update.
+        status: One of PENDING, PROCESSING, COMPLETED, FAILED.
+        progress: Integer 0–100.
+        current_step: Human-readable step description.
+        **kwargs: Optional additional fields (setup_started_at, setup_completed_at,
+                  setup_error, executive_brief, main_threats, key_opportunity,
+                  brief_generated_at).
+
+    Returns:
+        True if update succeeded, False otherwise.
+    """
+    if not supabase_client:
+        return False
+
+    payload: Dict[str, Any] = {
+        "setup_status": status,
+        "setup_progress": progress,
+        "setup_current_step": current_step,
+    }
+    payload.update(kwargs)
+
+    try:
+        supabase_client.table("companies").update(payload).eq("id", company_id).execute()
+        return True
+    except Exception as exc:
+        logger.exception("Failed to update company setup status for %s: %s", company_id, str(exc))
+        return False
+
+
+def save_discovered_competitor(company_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Insert a newly discovered competitor into the competitors table.
+
+    Args:
+        company_id: The UUID of the owning company.
+        data: Dict with keys: name, website_url, description, type, source,
+              product_similarity, customer_overlap, market_overlap,
+              business_model_overlap, competitive_score, confidence_score,
+              reason. is_accepted is always set to None (pending review).
+
+    Returns:
+        The inserted row dict, or None on failure.
+    """
+    if not supabase_client:
+        return None
+
+    payload: Dict[str, Any] = {
+        "company_id": company_id,
+        "name": data.get("name"),
+        "website_url": data.get("website_url"),
+        "description": data.get("description"),
+        "type": data.get("type"),
+        "source": data.get("source", "AI_DISCOVERED"),
+        "product_similarity": data.get("product_similarity"),
+        "customer_overlap": data.get("customer_overlap"),
+        "market_overlap": data.get("market_overlap"),
+        "business_model_overlap": data.get("business_model_overlap"),
+        "competitive_score": data.get("competitive_score"),
+        "confidence_score": data.get("confidence_score"),
+        "reason": data.get("reason"),
+        "is_accepted": None,  # pending review
+    }
+
+    try:
+        result = supabase_client.table("competitors").insert(payload).execute()
+        if result and result.data:
+            return result.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to save discovered competitor '%s': %s", data.get("name"), str(exc))
+        return None
+
+
+def get_competitors_for_company(company_id: str) -> list[Dict[str, Any]]:
+    """Return all competitors for a given company.
+
+    Args:
+        company_id: The UUID of the company.
+
+    Returns:
+        List of competitor dicts (may be empty).
+    """
+    if not supabase_client:
+        return []
+
+    try:
+        result = (
+            supabase_client.table("competitors")
+            .select("*")
+            .eq("company_id", company_id)
+            .order("competitive_score", desc=True)
+            .execute()
+        )
+        return result.data if result and result.data else []
+    except Exception as exc:
+        logger.exception("Failed to get competitors for company %s: %s", company_id, str(exc))
+        return []
+
+
+def get_competitor_by_id(competitor_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch a single competitor row by its UUID.
+
+    Args:
+        competitor_id: UUID of the competitor.
+
+    Returns:
+        Competitor dict or None.
+    """
+    if not supabase_client:
+        return None
+
+    try:
+        result = (
+            supabase_client.table("competitors")
+            .select("*")
+            .eq("id", competitor_id)
+            .limit(1)
+            .execute()
+        )
+        if result and result.data:
+            return result.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to get competitor %s: %s", competitor_id, str(exc))
+        return None
+
+
+def update_competitor_accepted(competitor_id: str, is_accepted: bool) -> Optional[Dict[str, Any]]:
+    """Set is_accepted to True or False on a competitor.
+
+    Args:
+        competitor_id: UUID of the competitor to update.
+        is_accepted: True = accepted, False = rejected.
+
+    Returns:
+        Updated competitor dict or None on failure.
+    """
+    if not supabase_client:
+        return None
+
+    try:
+        result = (
+            supabase_client.table("competitors")
+            .update({"is_accepted": is_accepted})
+            .eq("id", competitor_id)
+            .execute()
+        )
+        if result and result.data:
+            return result.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to update competitor acceptance %s: %s", competitor_id, str(exc))
+        return None
+
+
+def update_competitor_details(competitor_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Update description and score fields on an existing competitor row.
+
+    Used after background scraping of a manually added competitor.
+
+    Args:
+        competitor_id: UUID of the competitor to update.
+        data: Dict of fields to update (description, type, product_similarity, etc.).
+
+    Returns:
+        Updated competitor dict or None on failure.
+    """
+    if not supabase_client:
+        return None
+
+    allowed_fields = {
+        "description", "type", "product_similarity", "customer_overlap",
+        "market_overlap", "business_model_overlap", "competitive_score",
+        "confidence_score", "reason",
+    }
+    payload = {k: v for k, v in data.items() if k in allowed_fields}
+
+    if not payload:
+        return None
+
+    try:
+        result = (
+            supabase_client.table("competitors")
+            .update(payload)
+            .eq("id", competitor_id)
+            .execute()
+        )
+        if result and result.data:
+            return result.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to update competitor details %s: %s", competitor_id, str(exc))
+        return None
+

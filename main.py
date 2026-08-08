@@ -30,13 +30,29 @@ from models import (
     CompanyProfileResponse, 
     CompanyProfileResponseCompany,
     AuthRequest,
-    AuthResponse
+    AuthResponse,
+    SetupStatusResponse,
+    CompetitorOut,
+    CompetitorsListResponse,
+    ManualCompetitorRequest,
 )
 from scraper import scrape_website, scrape_social
 from extractor import extract_signals
 from analyzer import analyze_competitor, format_report
-from database import save_competitor_and_report, get_company_profile, upsert_company_profile, supabase_client
+from database import (
+    save_competitor_and_report,
+    get_company_profile,
+    get_company_profile_by_id,
+    upsert_company_profile,
+    get_competitors_for_company,
+    get_competitor_by_id,
+    update_competitor_accepted,
+    update_competitor_details,
+    save_manual_competitor,
+    supabase_client,
+)
 from auth import get_current_user
+from discovery_service import run_competitor_discovery
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -76,14 +92,7 @@ REPORTS_DIR.mkdir(exist_ok=True)
 
 
 def _slugify(text: str) -> str:
-    """Convert a string to a filesystem-safe slug.
-
-    Args:
-        text: The string to slugify.
-
-    Returns:
-        A lowercase, hyphen-separated slug safe for filenames.
-    """
+    """Convert a string to a filesystem-safe slug."""
     slug = text.lower().strip()
     slug = re.sub(r"[^\w\s-]", "", slug)
     slug = re.sub(r"[\s_]+", "-", slug)
@@ -159,12 +168,16 @@ async def get_company_status(user_id: str = Depends(get_current_user)) -> Compan
         return CompanyProfileResponse(setupCompleted=False, company=None)
         
     return CompanyProfileResponse(
-        setupCompleted=True,
+        setupCompleted=bool(company_data.get("setup_status") == "COMPLETED" or company_data.get("onboarding_completed")),
         company=CompanyProfileResponseCompany(
             id=str(company_data.get("id", "")),
             companyName=company_data.get("company_name", ""),
             website=company_data.get("website", ""),
-            industry=company_data.get("industry", "")
+            industry=company_data.get("industry", ""),
+            setupStatus=company_data.get("setup_status", "PENDING"),
+            executiveBrief=company_data.get("executive_brief"),
+            mainThreats=company_data.get("main_threats"),
+            keyOpportunity=company_data.get("key_opportunity"),
         )
     )
 
@@ -174,23 +187,276 @@ async def submit_company_profile(
     payload: CompanyProfilePayload,
     user_id: str = Depends(get_current_user)
 ) -> CompanyProfileResponse:
-    """Submit or update the company profile."""
+    """Submit or update company profile and trigger async competitor discovery immediately."""
     data = payload.model_dump()
     data["website"] = str(data["website"])
     
     company_data = upsert_company_profile(user_id, data)
     if not company_data:
         raise HTTPException(status_code=500, detail="Failed to save company profile.")
+
+    company_id = str(company_data.get("id", ""))
+    if company_id:
+        run_competitor_discovery(company_id)
         
     return CompanyProfileResponse(
         setupCompleted=True,
         company=CompanyProfileResponseCompany(
-            id=str(company_data.get("id", "")),
+            id=company_id,
             companyName=company_data.get("company_name", ""),
             website=company_data.get("website", ""),
-            industry=company_data.get("industry", "")
+            industry=company_data.get("industry", ""),
+            setupStatus=company_data.get("setup_status", "PROCESSING"),
+            executiveBrief=company_data.get("executive_brief"),
+            mainThreats=company_data.get("main_threats"),
+            keyOpportunity=company_data.get("key_opportunity"),
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Setup Status & Discovery Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/company/setup-status", response_model=SetupStatusResponse)
+async def get_setup_status(user_id: str = Depends(get_current_user)) -> SetupStatusResponse:
+    """Return discovery job progress status for the user's company."""
+    company = get_company_profile(user_id)
+    if not company:
+        return SetupStatusResponse(
+            status="PENDING",
+            progress=0,
+            currentStep="Not started",
+            completedAt=None,
+            error=None
+        )
+
+    return SetupStatusResponse(
+        status=company.get("setup_status", "PENDING"),
+        progress=company.get("setup_progress", 0),
+        currentStep=company.get("setup_current_step"),
+        completedAt=company.get("setup_completed_at"),
+        error=company.get("setup_error")
+    )
+
+
+@app.post("/api/company/trigger-discovery")
+async def trigger_discovery(user_id: str = Depends(get_current_user)) -> dict:
+    """Allow user/frontend to retry or trigger competitor discovery job."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found. Complete onboarding first.")
+
+    company_id = str(company.get("id", ""))
+    status = company.get("setup_status", "PENDING")
+
+    if status in ("PROCESSING",):
+        logger.info("Discovery job already running for company ID: %s", company_id)
+        return {"status": "processing", "message": "Discovery job is already in progress."}
+
+    run_competitor_discovery(company_id)
+    return {"status": "ok", "message": "Competitor discovery triggered in background."}
+
+
+# ---------------------------------------------------------------------------
+# Competitors Endpoints
+# ---------------------------------------------------------------------------
+
+def _map_competitor_row(row: dict) -> CompetitorOut:
+    return CompetitorOut(
+        id=str(row.get("id", "")),
+        name=row.get("name", ""),
+        website=row.get("website_url") or row.get("website"),
+        description=row.get("description"),
+        type=row.get("type"),
+        source=row.get("source"),
+        competitiveScore=row.get("competitive_score"),
+        confidenceScore=row.get("confidence_score"),
+        productSimilarity=row.get("product_similarity"),
+        customerOverlap=row.get("customer_overlap"),
+        marketOverlap=row.get("market_overlap"),
+        businessModelOverlap=row.get("business_model_overlap"),
+        reason=row.get("reason"),
+        isAccepted=row.get("is_accepted")
+    )
+
+
+@app.get("/api/competitors", response_model=CompetitorsListResponse)
+async def get_competitors(user_id: str = Depends(get_current_user)) -> CompetitorsListResponse:
+    """Get all discovered and manual competitors for the user's company."""
+    company = get_company_profile(user_id)
+    if not company:
+        return CompetitorsListResponse(competitors=[], total=0, direct=0, indirect=0, emerging=0)
+
+    company_id = str(company.get("id", ""))
+    rows = get_competitors_for_company(company_id)
+
+    competitors = [_map_competitor_row(r) for r in rows]
+    total = len(competitors)
+    direct = sum(1 for c in competitors if c.type == "DIRECT")
+    indirect = sum(1 for c in competitors if c.type == "INDIRECT")
+    emerging = sum(1 for c in competitors if c.type == "EMERGING")
+
+    return CompetitorsListResponse(
+        competitors=competitors,
+        total=total,
+        direct=direct,
+        indirect=indirect,
+        emerging=emerging
+    )
+
+
+@app.post("/api/competitors/{competitor_id}/accept", response_model=CompetitorOut)
+async def accept_competitor(
+    competitor_id: str,
+    user_id: str = Depends(get_current_user)
+) -> CompetitorOut:
+    """Accept a competitor recommendation."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+
+    company_id = str(company.get("id", ""))
+    comp = get_competitor_by_id(competitor_id)
+
+    if not comp or str(comp.get("company_id")) != company_id:
+        raise HTTPException(status_code=404, detail="Competitor not found.")
+
+    updated = update_competitor_accepted(competitor_id, True)
+    if not updated:
+        comp["is_accepted"] = True
+        return _map_competitor_row(comp)
+
+    return _map_competitor_row(updated)
+
+
+@app.post("/api/competitors/{competitor_id}/reject", response_model=CompetitorOut)
+async def reject_competitor(
+    competitor_id: str,
+    user_id: str = Depends(get_current_user)
+) -> CompetitorOut:
+    """Reject a competitor recommendation."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+
+    company_id = str(company.get("id", ""))
+    comp = get_competitor_by_id(competitor_id)
+
+    if not comp or str(comp.get("company_id")) != company_id:
+        raise HTTPException(status_code=404, detail="Competitor not found.")
+
+    updated = update_competitor_accepted(competitor_id, False)
+    if not updated:
+        comp["is_accepted"] = False
+        return _map_competitor_row(comp)
+
+    return _map_competitor_row(updated)
+
+
+async def _process_manual_competitor_background(competitor_id: str, company_id: str, website: str, name: str):
+    """Scrape website with Jina and extract profile/scores with Groq in background."""
+    try:
+        content = await scrape_website(website)
+        company = get_company_profile_by_id(company_id) or {}
+        company_name = company.get("company_name", "")
+        industry = company.get("industry", "")
+        description = company.get("description", "")
+        products_raw = company.get("products_or_services", [])
+        products_str = ", ".join(products_raw) if isinstance(products_raw, list) else str(products_raw)
+
+        import discovery_service
+        profile_prompt = f"""You are analyzing a company website to extract structured information. Return only valid JSON, no explanation, no markdown.
+
+Extract this structure:
+{{
+  "companyName": "{name}",
+  "website": "{website}",
+  "description": string of 2 to 3 sentences maximum,
+  "mainProduct": string,
+  "targetCustomers": array of strings,
+  "industry": string,
+  "businessModel": one of B2B or B2C or Both or Unknown,
+  "isActualCompany": true
+}}
+
+Website content:
+{content[:3000]}"""
+
+        parsed_profile = await discovery_service._call_groq_json(profile_prompt)
+        cand_desc = parsed_profile.get("description", f"Manual competitor entry for {name}.")
+
+        score_prompt = f"""You are a competitive intelligence analyst. Compare these two companies and score their competitive overlap. Return only valid JSON, no explanation, no markdown.
+
+OUR COMPANY:
+Name: {company_name}
+Industry: {industry}
+Description: {description}
+Products: {products_str}
+
+CANDIDATE COMPETITOR:
+Name: {name}
+Description: {cand_desc}
+Main Product: {parsed_profile.get("mainProduct", "")}
+
+Return this JSON structure:
+{{
+  "productSimilarity": integer 0 to 100,
+  "customerOverlap": integer 0 to 100,
+  "marketOverlap": integer 0 to 100,
+  "businessModelOverlap": integer 0 to 100,
+  "overallScore": integer 0 to 100,
+  "competitorType": one of DIRECT or INDIRECT or EMERGING,
+  "reason": string of 2 to 3 sentences explaining why they are a competitor,
+  "confidenceScore": integer 0 to 100
+}}"""
+
+        score_res = await discovery_service._call_groq_json(score_prompt)
+
+        update_data = {
+            "description": cand_desc,
+            "type": score_res.get("competitorType", "DIRECT"),
+            "product_similarity": int(score_res.get("productSimilarity", 50)),
+            "customer_overlap": int(score_res.get("customerOverlap", 50)),
+            "market_overlap": int(score_res.get("marketOverlap", 50)),
+            "business_model_overlap": int(score_res.get("businessModelOverlap", 50)),
+            "competitive_score": int(score_res.get("overallScore", 50)),
+            "confidence_score": int(score_res.get("confidenceScore", 80)),
+            "reason": score_res.get("reason", f"Manually added competitor {name}."),
+        }
+        update_competitor_details(competitor_id, update_data)
+        logger.info("Background processing complete for manual competitor ID: %s", competitor_id)
+    except Exception as exc:
+        logger.warning("Background processing failed for manual competitor %s: %s", competitor_id, str(exc))
+
+
+@app.post("/api/competitors/manual", response_model=CompetitorOut)
+async def add_manual_competitor(
+    req: ManualCompetitorRequest,
+    user_id: str = Depends(get_current_user)
+) -> CompetitorOut:
+    """Manually add a competitor, returning immediately and extracting details in background."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+
+    company_id = str(company.get("id", ""))
+    row = save_manual_competitor(company_id, req.name, req.website)
+
+    if not row:
+        row = {
+            "id": f"manual-{int(datetime.utcnow().timestamp())}",
+            "name": req.name,
+            "website_url": req.website,
+            "source": "MANUAL",
+            "is_accepted": True
+        }
+
+    competitor_id = str(row.get("id", ""))
+    if competitor_id:
+        asyncio.create_task(_process_manual_competitor_background(competitor_id, company_id, req.website, req.name))
+
+    return _map_competitor_row(row)
 
 
 @app.post("/analyze", response_model=CompetitorReport)
