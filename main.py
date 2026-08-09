@@ -14,8 +14,9 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from typing import Optional
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import sys
@@ -35,6 +36,14 @@ from models import (
     CompetitorOut,
     CompetitorsListResponse,
     ManualCompetitorRequest,
+    IntelligenceDocumentOut,
+    IntelligenceFeedResponse,
+    IntelligenceSummaryResponse,
+    IntelligenceStatsResponse,
+    MonitoringJobOut,
+    MonitoringJobsResponse,
+    CompetitorStats,
+    EventTypeStats,
 )
 from scraper import scrape_website, scrape_social
 from extractor import extract_signals
@@ -49,10 +58,18 @@ from database import (
     update_competitor_accepted,
     update_competitor_details,
     save_manual_competitor,
+    get_intelligence_feed,
+    get_intelligence_stats,
+    get_monitoring_jobs_history,
+    get_active_monitoring_job,
+    create_monitoring_job,
     supabase_client,
 )
 from auth import get_current_user
 from discovery_service import run_competitor_discovery
+from competitor_monitoring_service import CompetitorMonitoringService
+from scheduler import start_scheduler, stop_scheduler
+
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -83,6 +100,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Initializing background scheduled cron jobs...")
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Shutting down background scheduler...")
+    stop_scheduler()
+
 
 # ---------------------------------------------------------------------------
 # Startup: ensure reports directory exists
@@ -558,7 +588,175 @@ async def analyze(req: CompetitorRequest) -> CompetitorReport:
 
 
 # ---------------------------------------------------------------------------
+# Phase 2 — Intelligence Monitoring Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/intelligence/feed", response_model=IntelligenceFeedResponse)
+async def get_intelligence_feed_endpoint(
+    competitorId: Optional[str] = None,
+    eventType: Optional[str] = None,
+    impactLabel: Optional[str] = None,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user_id: str = Depends(get_current_user)
+) -> IntelligenceFeedResponse:
+    """Get recent intelligence feed documents for the authenticated user's company."""
+    company = get_company_profile(user_id)
+    if not company:
+        return IntelligenceFeedResponse(documents=[], total=0, hasMore=False)
+
+    company_id = str(company.get("id", ""))
+    docs, total = get_intelligence_feed(
+        company_id=company_id,
+        competitor_id=competitorId,
+        event_type=eventType,
+        impact_label=impactLabel,
+        limit=limit,
+        offset=offset,
+    )
+
+    doc_outs = []
+    for d in docs:
+        doc_outs.append(
+            IntelligenceDocumentOut(
+                id=str(d.get("id", "")),
+                competitorId=str(d.get("competitor_id", "")),
+                competitorName=d.get("competitor_name"),
+                sourceUrl=d.get("source_url", ""),
+                title=d.get("title"),
+                summary=d.get("summary"),
+                eventType=d.get("event_type"),
+                sentiment=d.get("sentiment"),
+                sentimentConfidence=d.get("sentiment_confidence"),
+                relevanceScore=d.get("relevance_score"),
+                relevanceReason=d.get("relevance_reason"),
+                impactScore=d.get("impact_score"),
+                impactLabel=d.get("impact_label"),
+                publishedDate=d.get("published_date"),
+                createdAt=d.get("created_at"),
+            )
+        )
+
+    has_more = (offset + limit) < total
+    return IntelligenceFeedResponse(documents=doc_outs, total=total, hasMore=has_more)
+
+
+@app.get("/api/intelligence/summary", response_model=IntelligenceSummaryResponse)
+async def get_intelligence_summary_endpoint(
+    user_id: str = Depends(get_current_user)
+) -> IntelligenceSummaryResponse:
+    """Get latest weekly AI strategy summary for the authenticated user's company."""
+    company = get_company_profile(user_id)
+    if not company:
+        return IntelligenceSummaryResponse()
+
+    return IntelligenceSummaryResponse(
+        weeklyBrief=company.get("weekly_brief"),
+        topThreats=company.get("top_threats") or [],
+        opportunities=company.get("opportunities") or [],
+        watchList=company.get("watch_list") or [],
+        strategicRecommendations=company.get("strategic_recommendations") or [],
+        generatedAt=company.get("weekly_brief_generated_at"),
+    )
+
+
+@app.get("/api/intelligence/stats", response_model=IntelligenceStatsResponse)
+async def get_intelligence_stats_endpoint(
+    user_id: str = Depends(get_current_user)
+) -> IntelligenceStatsResponse:
+    """Get aggregated statistics about intelligence collected for the company."""
+    company = get_company_profile(user_id)
+    if not company:
+        return IntelligenceStatsResponse(
+            totalDocuments=0,
+            documentsThisWeek=0,
+            criticalEvents=0,
+            highEvents=0,
+            mediumEvents=0,
+            lowEvents=0,
+            byCompetitor=[],
+            byEventType=[]
+        )
+
+    company_id = str(company.get("id", ""))
+    stats = get_intelligence_stats(company_id)
+
+    by_comp = [CompetitorStats(**c) for c in stats.get("byCompetitor", [])]
+    by_event = [EventTypeStats(**e) for e in stats.get("byEventType", [])]
+
+    return IntelligenceStatsResponse(
+        totalDocuments=stats.get("totalDocuments", 0),
+        documentsThisWeek=stats.get("documentsThisWeek", 0),
+        criticalEvents=stats.get("criticalEvents", 0),
+        highEvents=stats.get("highEvents", 0),
+        mediumEvents=stats.get("mediumEvents", 0),
+        lowEvents=stats.get("lowEvents", 0),
+        byCompetitor=by_comp,
+        byEventType=by_event,
+    )
+
+
+@app.post("/api/intelligence/trigger-monitoring")
+async def trigger_monitoring_endpoint(
+    user_id: str = Depends(get_current_user)
+) -> dict:
+    """Manually trigger a background news monitoring job for the user's company."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+
+    company_id = str(company.get("id", ""))
+    active_job = get_active_monitoring_job(company_id)
+    if active_job:
+        raise HTTPException(
+            status_code=400,
+            detail="A monitoring job is already currently running for this company."
+        )
+
+    job = create_monitoring_job(company_id=company_id, competitor_id=None, job_type="NEWS_MONITORING")
+    job_id = job.get("id") if job else f"job-{int(datetime.utcnow().timestamp())}"
+
+    asyncio.create_task(CompetitorMonitoringService.runNewsMonitoring(company_id))
+
+    return {
+        "message": "Monitoring job started",
+        "jobId": str(job_id)
+    }
+
+
+@app.get("/api/intelligence/jobs", response_model=MonitoringJobsResponse)
+async def get_monitoring_jobs_endpoint(
+    user_id: str = Depends(get_current_user)
+) -> MonitoringJobsResponse:
+    """Get recent monitoring jobs history for the company."""
+    company = get_company_profile(user_id)
+    if not company:
+        return MonitoringJobsResponse(jobs=[])
+
+    company_id = str(company.get("id", ""))
+    jobs_rows = get_monitoring_jobs_history(company_id, limit=20)
+
+    job_outs = []
+    for j in jobs_rows:
+        job_outs.append(
+            MonitoringJobOut(
+                id=str(j.get("id", "")),
+                jobType=j.get("job_type", "NEWS_MONITORING"),
+                status=j.get("status", "COMPLETED"),
+                documentsFound=j.get("documents_found", 0),
+                documentsProcessed=j.get("documents_processed", 0),
+                startedAt=j.get("started_at"),
+                completedAt=j.get("completed_at"),
+                error=j.get("error"),
+            )
+        )
+
+    return MonitoringJobsResponse(jobs=job_outs)
+
+
+# ---------------------------------------------------------------------------
 # Run directly
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+

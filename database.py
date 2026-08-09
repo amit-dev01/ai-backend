@@ -7,6 +7,7 @@ Manages storing competitors and analysis reports into Supabase tables:
 """
 
 import logging
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from supabase import create_client, Client
 from config import SUPABASE_URL, SUPABASE_KEY
@@ -472,4 +473,452 @@ def update_competitor_details(competitor_id: str, data: Dict[str, Any]) -> Optio
     except Exception as exc:
         logger.exception("Failed to update competitor details %s: %s", competitor_id, str(exc))
         return None
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Live Competitor Monitoring Helpers
+# ---------------------------------------------------------------------------
+
+def get_accepted_competitors_for_company(company_id: str) -> list[Dict[str, Any]]:
+    """Fetch accepted competitors for a company."""
+    if not supabase_client:
+        return []
+    try:
+        result = (
+            supabase_client.table("competitors")
+            .select("*")
+            .eq("company_id", company_id)
+            .eq("is_accepted", True)
+            .execute()
+        )
+        return result.data if result and result.data else []
+    except Exception as exc:
+        logger.exception("Failed to get accepted competitors for %s: %s", company_id, str(exc))
+        return []
+
+
+def get_document_by_url(url: str, within_hours: int = 24) -> Optional[Dict[str, Any]]:
+    """Check if a document with this source_url exists within the last N hours."""
+    if not supabase_client:
+        return None
+    try:
+        result = (
+            supabase_client.table("documents")
+            .select("*")
+            .eq("source_url", url)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if result and result.data:
+            doc = result.data[0]
+            created_at_str = doc.get("created_at")
+            if created_at_str:
+                created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+                now = datetime.now(created_at.tzinfo)
+                if (now - created_at).total_seconds() < (within_hours * 3600):
+                    return doc
+        return None
+    except Exception as exc:
+        logger.exception("Failed to check duplicate document URL %s: %s", url, str(exc))
+        return None
+
+
+def save_document(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Save a processed document to the documents table."""
+    if not supabase_client:
+        return None
+    now_str = datetime.utcnow().isoformat()
+    payload = {
+        "competitor_id": data.get("competitorId") or data.get("competitor_id"),
+        "company_id": data.get("companyId") or data.get("company_id"),
+        "source_url": data.get("sourceUrl") or data.get("source_url"),
+        "title": data.get("title"),
+        "published_date": data.get("publishedDate") or data.get("published_date"),
+        "raw_content": data.get("rawContent") or data.get("raw_content"),
+        "summary": data.get("summary"),
+        "event_type": data.get("eventType") or data.get("event_type"),
+        "sentiment": data.get("sentiment"),
+        "sentiment_confidence": data.get("sentimentConfidence") or data.get("sentiment_confidence"),
+        "relevance_score": data.get("relevanceScore") or data.get("relevance_score"),
+        "relevance_reason": data.get("relevanceReason") or data.get("relevance_reason"),
+        "impact_score": data.get("impactScore") or data.get("impact_score"),
+        "impact_label": data.get("impactLabel") or data.get("impact_label"),
+        "is_processed": data.get("isProcessed", True),
+        "created_at": now_str,
+        "updated_at": now_str,
+    }
+    try:
+        result = supabase_client.table("documents").insert(payload).execute()
+        if result and result.data:
+            return result.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to save document: %s", str(exc))
+        return None
+
+
+def get_url_cache(url: str) -> Optional[Dict[str, Any]]:
+    """Get cached URL scraping record."""
+    if not supabase_client:
+        return None
+    try:
+        result = (
+            supabase_client.table("url_cache")
+            .select("*")
+            .eq("url", url)
+            .limit(1)
+            .execute()
+        )
+        if result and result.data:
+            return result.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to fetch URL cache for %s: %s", url, str(exc))
+        return None
+
+
+def upsert_url_cache(url: str, content_hash: str) -> Optional[Dict[str, Any]]:
+    """Insert or update URL cache record."""
+    if not supabase_client:
+        return None
+    now_str = datetime.utcnow().isoformat()
+    payload = {
+        "url": url,
+        "scraped_at": now_str,
+        "content_hash": content_hash,
+    }
+    try:
+        existing = get_url_cache(url)
+        if existing:
+            result = (
+                supabase_client.table("url_cache")
+                .update(payload)
+                .eq("url", url)
+                .execute()
+            )
+        else:
+            result = (
+                supabase_client.table("url_cache")
+                .insert(payload)
+                .execute()
+            )
+        if result and result.data:
+            return result.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to upsert URL cache for %s: %s", url, str(exc))
+        return None
+
+
+def create_monitoring_job(company_id: str, competitor_id: Optional[str], job_type: str) -> Optional[Dict[str, Any]]:
+    """Create a monitoring job record with status RUNNING."""
+    if not supabase_client:
+        return None
+    now_str = datetime.utcnow().isoformat()
+    payload = {
+        "company_id": company_id,
+        "competitor_id": competitor_id,
+        "job_type": job_type,
+        "status": "RUNNING",
+        "documents_found": 0,
+        "documents_processed": 0,
+        "started_at": now_str,
+    }
+    try:
+        result = supabase_client.table("monitoring_jobs").insert(payload).execute()
+        if result and result.data:
+            return result.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to create monitoring job: %s", str(exc))
+        return None
+
+
+def update_monitoring_job(
+    job_id: str,
+    status: str,
+    documents_found: int,
+    documents_processed: int,
+    error: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """Update monitoring job status and counters."""
+    if not supabase_client:
+        return None
+    now_str = datetime.utcnow().isoformat()
+    payload = {
+        "status": status,
+        "documents_found": documents_found,
+        "documents_processed": documents_processed,
+        "completed_at": now_str,
+        "error": error,
+    }
+    try:
+        result = (
+            supabase_client.table("monitoring_jobs")
+            .update(payload)
+            .eq("id", job_id)
+            .execute()
+        )
+        if result and result.data:
+            return result.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to update monitoring job %s: %s", job_id, str(exc))
+        return None
+
+
+def get_active_monitoring_job(company_id: str) -> Optional[Dict[str, Any]]:
+    """Check if a monitoring job is currently running for the company."""
+    if not supabase_client:
+        return None
+    try:
+        result = (
+            supabase_client.table("monitoring_jobs")
+            .select("*")
+            .eq("company_id", company_id)
+            .eq("status", "RUNNING")
+            .limit(1)
+            .execute()
+        )
+        if result and result.data:
+            return result.data[0]
+        return None
+    except Exception as exc:
+        logger.exception("Failed to check active monitoring job for %s: %s", company_id, str(exc))
+        return None
+
+
+def get_monitoring_jobs_history(company_id: str, limit: int = 20) -> list[Dict[str, Any]]:
+    """Fetch monitoring jobs history for a company."""
+    if not supabase_client:
+        return []
+    try:
+        result = (
+            supabase_client.table("monitoring_jobs")
+            .select("*")
+            .eq("company_id", company_id)
+            .order("started_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data if result and result.data else []
+    except Exception as exc:
+        logger.exception("Failed to get monitoring jobs history for %s: %s", company_id, str(exc))
+        return []
+
+
+def get_intelligence_feed(
+    company_id: str,
+    competitor_id: Optional[str] = None,
+    event_type: Optional[str] = None,
+    impact_label: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0
+) -> tuple[list[Dict[str, Any]], int]:
+    """Query intelligence feed documents for a company."""
+    if not supabase_client:
+        return [], 0
+    try:
+        query = (
+            supabase_client.table("documents")
+            .select("*, competitors(name)", count="exact")
+            .eq("company_id", company_id)
+            .eq("is_processed", True)
+        )
+        if competitor_id:
+            query = query.eq("competitor_id", competitor_id)
+        if event_type:
+            query = query.eq("event_type", event_type)
+        if impact_label:
+            query = query.eq("impact_label", impact_label)
+
+        result = (
+            query.order("created_at", desc=True)
+            .range(offset, offset + limit - 1)
+            .execute()
+        )
+        docs = result.data if result and result.data else []
+        total = result.count if result and result.count is not None else len(docs)
+        
+        # Flatten competitor name
+        for d in docs:
+            comp_obj = d.get("competitors")
+            if isinstance(comp_obj, dict):
+                d["competitor_name"] = comp_obj.get("name")
+            elif isinstance(comp_obj, list) and comp_obj:
+                d["competitor_name"] = comp_obj[0].get("name")
+        return docs, total
+    except Exception as exc:
+        logger.exception("Failed to get intelligence feed for %s: %s", company_id, str(exc))
+        return [], 0
+
+
+def get_recent_intelligence_documents(company_id: str, days: int = 7, limit: int = 20) -> list[Dict[str, Any]]:
+    """Fetch top documents from recent days ordered by impact_score desc."""
+    if not supabase_client:
+        return []
+    try:
+        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        result = (
+            supabase_client.table("documents")
+            .select("*, competitors(name)")
+            .eq("company_id", company_id)
+            .eq("is_processed", True)
+            .gte("created_at", cutoff)
+            .order("impact_score", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        docs = result.data if result and result.data else []
+        for d in docs:
+            comp_obj = d.get("competitors")
+            if isinstance(comp_obj, dict):
+                d["competitor_name"] = comp_obj.get("name")
+            elif isinstance(comp_obj, list) and comp_obj:
+                d["competitor_name"] = comp_obj[0].get("name")
+        return docs
+    except Exception as exc:
+        logger.exception("Failed to get recent intelligence documents for %s: %s", company_id, str(exc))
+        return []
+
+
+def get_intelligence_stats(company_id: str) -> Dict[str, Any]:
+    """Calculate aggregated stats for intelligence collected."""
+    if not supabase_client:
+        return {
+            "totalDocuments": 0,
+            "documentsThisWeek": 0,
+            "criticalEvents": 0,
+            "highEvents": 0,
+            "mediumEvents": 0,
+            "lowEvents": 0,
+            "byCompetitor": [],
+            "byEventType": []
+        }
+    try:
+        res = (
+            supabase_client.table("documents")
+            .select("*, competitors(id, name)")
+            .eq("company_id", company_id)
+            .eq("is_processed", True)
+            .execute()
+        )
+        docs = res.data if res and res.data else []
+        total_docs = len(docs)
+
+        now = datetime.utcnow()
+        cutoff_7d = now - timedelta(days=7)
+        docs_this_week = 0
+        critical = 0
+        high = 0
+        medium = 0
+        low = 0
+
+        comp_map: Dict[str, Dict[str, Any]] = {}
+        event_map: Dict[str, int] = {}
+
+        for d in docs:
+            created_str = d.get("created_at")
+            if created_str:
+                dt = datetime.fromisoformat(created_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                if dt >= cutoff_7d:
+                    docs_this_week += 1
+
+            label = d.get("impact_label")
+            if label == "CRITICAL":
+                critical += 1
+            elif label == "HIGH":
+                high += 1
+            elif label == "MEDIUM":
+                medium += 1
+            elif label == "LOW":
+                low += 1
+
+            etype = d.get("event_type", "OTHER")
+            event_map[etype] = event_map.get(etype, 0) + 1
+
+            comp_id = d.get("competitor_id")
+            comp_obj = d.get("competitors")
+            comp_name = "Unknown Competitor"
+            if isinstance(comp_obj, dict):
+                comp_name = comp_obj.get("name", comp_name)
+
+            if comp_id:
+                if comp_id not in comp_map:
+                    comp_map[comp_id] = {
+                        "competitorId": comp_id,
+                        "competitorName": comp_name,
+                        "documentCount": 0,
+                        "latestEvent": etype,
+                        "latestEventDate": created_str,
+                    }
+                comp_map[comp_id]["documentCount"] += 1
+                if created_str and (comp_map[comp_id]["latestEventDate"] is None or created_str > comp_map[comp_id]["latestEventDate"]):
+                    comp_map[comp_id]["latestEventDate"] = created_str
+                    comp_map[comp_id]["latestEvent"] = etype
+
+        by_comp = list(comp_map.values())
+        by_event = [{"eventType": k, "count": v} for k, v in event_map.items()]
+
+        return {
+            "totalDocuments": total_docs,
+            "documentsThisWeek": docs_this_week,
+            "criticalEvents": critical,
+            "highEvents": high,
+            "mediumEvents": medium,
+            "lowEvents": low,
+            "byCompetitor": by_comp,
+            "byEventType": by_event,
+        }
+    except Exception as exc:
+        logger.exception("Failed to get intelligence stats for %s: %s", company_id, str(exc))
+        return {
+            "totalDocuments": 0,
+            "documentsThisWeek": 0,
+            "criticalEvents": 0,
+            "highEvents": 0,
+            "mediumEvents": 0,
+            "lowEvents": 0,
+            "byCompetitor": [],
+            "byEventType": []
+        }
+
+
+def update_company_weekly_summary(company_id: str, data: Dict[str, Any]) -> bool:
+    """Update weekly intelligence brief fields on company profile."""
+    if not supabase_client:
+        return False
+    payload = {
+        "weekly_brief": data.get("weeklyBrief"),
+        "top_threats": data.get("topThreats", []),
+        "opportunities": data.get("opportunities", []),
+        "watch_list": data.get("watchList", []),
+        "strategic_recommendations": data.get("strategicRecommendations", []),
+        "weekly_brief_generated_at": datetime.utcnow().isoformat(),
+    }
+    try:
+        supabase_client.table("companies").update(payload).eq("id", company_id).execute()
+        return True
+    except Exception as exc:
+        logger.exception("Failed to update company weekly summary for %s: %s", company_id, str(exc))
+        return False
+
+
+def get_completed_companies() -> list[Dict[str, Any]]:
+    """Return all companies that have setup completed."""
+    if not supabase_client:
+        return []
+    try:
+        res = (
+            supabase_client.table("companies")
+            .select("*")
+            .or_("setup_status.eq.COMPLETED,onboarding_completed.eq.true")
+            .execute()
+        )
+        return res.data if res and res.data else []
+    except Exception as exc:
+        logger.exception("Failed to get completed companies: %s", str(exc))
+        return []
+
 

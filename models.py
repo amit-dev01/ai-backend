@@ -150,3 +150,78 @@ class ManualCompetitorRequest(BaseModel):
     """Body for POST /api/competitors/manual."""
     name: str = Field(..., description="Name of the competitor")
     website: str = Field(..., description="Website URL of the competitor")
+
+
+# --- Intelligence Monitoring Models ---
+
+class IntelligenceDocumentOut(BaseModel):
+    id: str
+    competitorId: str
+    competitorName: Optional[str] = None
+    sourceUrl: str
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    eventType: Optional[str] = None
+    sentiment: Optional[str] = None
+    sentimentConfidence: Optional[int] = None
+    relevanceScore: Optional[int] = None
+    relevanceReason: Optional[str] = None
+    impactScore: Optional[int] = None
+    impactLabel: Optional[str] = None
+    publishedDate: Optional[str] = None
+    createdAt: Optional[str] = None
+
+
+class IntelligenceFeedResponse(BaseModel):
+    documents: list[IntelligenceDocumentOut]
+    total: int
+    hasMore: bool
+
+
+class IntelligenceSummaryResponse(BaseModel):
+    weeklyBrief: Optional[str] = None
+    topThreats: list[dict[str, Any]] = []
+    opportunities: list[dict[str, Any]] = []
+    watchList: list[str] = []
+    strategicRecommendations: list[str] = []
+    generatedAt: Optional[str] = None
+
+
+class CompetitorStats(BaseModel):
+    competitorId: str
+    competitorName: str
+    documentCount: int
+    latestEvent: Optional[str] = None
+    latestEventDate: Optional[str] = None
+
+
+class EventTypeStats(BaseModel):
+    eventType: str
+    count: int
+
+
+class IntelligenceStatsResponse(BaseModel):
+    totalDocuments: int
+    documentsThisWeek: int
+    criticalEvents: int
+    highEvents: int
+    mediumEvents: int
+    lowEvents: int
+    byCompetitor: list[CompetitorStats]
+    byEventType: list[EventTypeStats]
+
+
+class MonitoringJobOut(BaseModel):
+    id: str
+    jobType: str
+    status: str
+    documentsFound: int
+    documentsProcessed: int
+    startedAt: Optional[str] = None
+    completedAt: Optional[str] = None
+    error: Optional[str] = None
+
+
+class MonitoringJobsResponse(BaseModel):
+    jobs: list[MonitoringJobOut]
+
