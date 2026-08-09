@@ -1019,10 +1019,7 @@ async def trigger_monitoring_endpoint(
     company_id = str(company.get("id", ""))
     active_job = get_active_monitoring_job(company_id)
     if active_job:
-        raise HTTPException(
-            status_code=400,
-            detail="A monitoring job is already currently running for this company."
-        )
+        logger.info("Overriding existing active monitoring job for company %s", company_id)
 
     job = create_monitoring_job(company_id=company_id, competitor_id=None, job_type="NEWS_MONITORING")
     job_id = job.get("id") if job else f"job-{int(datetime.utcnow().timestamp())}"
