@@ -1,218 +1,149 @@
-# Competitor Analysis AI
-
-AI-powered competitive intelligence API. Submit a competitor's company name and website URL, and receive a comprehensive, executive-ready analysis report — complete with SWOT, prioritized next steps, and differentiation strategy.
-
-Built with **FastAPI**, **Crawl4AI**, and **Groq** (Llama 3.3 70B / Llama 3.1 8B).
-
----
-
-## Features
-
-- **Automated web scraping** via Crawl4AI (headless Chromium)
-- **Structured data extraction** using Llama 3.1 8B (via Groq)
-- **Deep competitive analysis** using Llama 3.3 70B (via Groq) — SWOT, Porter's, positioning
-- **Polished Markdown reports** saved to disk and returned via API
-- **Best-effort social scraping** (Instagram, LinkedIn, etc.)
-- Fully async end-to-end
+<div align="center">
+  <img src="https://img.icons8.com/color/96/000000/artificial-intelligence.png" alt="AI Icon"/>
+  <h1>AI Competitive Intelligence Platform</h1>
+  <p>
+    <strong>Automated competitor discovery, live web monitoring, and AI-synthesized strategy briefs.</strong>
+  </p>
+  
+  <p>
+    <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi" alt="FastAPI" /></a>
+    <a href="https://python.org/"><img src="https://img.shields.io/badge/Python_3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" /></a>
+    <a href="https://supabase.com/"><img src="https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" /></a>
+    <a href="https://groq.com/"><img src="https://img.shields.io/badge/Groq-FF3366?style=for-the-badge&logo=groq&logoColor=white" alt="Groq AI" /></a>
+  </p>
+</div>
 
 ---
 
-## Project Structure
-
-```
-competitor-ai/
-├── main.py              # FastAPI app entry
-├── scraper.py           # Crawl4AI async scraping
-├── extractor.py         # LLM-based data extraction
-├── analyzer.py          # LLM-based business analysis
-├── prompts.py           # All LLM prompt templates
-├── models.py            # Pydantic schemas
-├── config.py            # Env + settings
-├── requirements.txt
-├── .env.example
-├── README.md
-└── reports/             # Auto-created, stores .md reports
-```
+## 📖 Table of Contents
+- [About the Project](#-about-the-project)
+- [Architecture & Tech Stack](#-architecture--tech-stack)
+- [Core Features](#-core-features)
+- [Getting Started](#-getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Environment Variables](#environment-variables)
+- [API Reference](#-api-reference)
+- [Background Workers](#-background-workers)
 
 ---
 
-## Setup
+## 🚀 About the Project
 
-### 1. Clone and enter the project
+This backend powers a real-time Competitive Intelligence (CI) dashboard. Rather than manually tracking competitors, the system uses semantic search (**Exa AI**) and live web scraping (**Jina AI**) to autonomously identify market rivals. It then leverages LLMs (**Groq / LLaMA 3**) to read their websites, track news events, and generate actionable executive strategy briefs dynamically.
 
-```bash
-cd competitor-ai
-```
+---
 
-### 2. Create a virtual environment (recommended)
+## 🛠 Architecture & Tech Stack
 
-```bash
-python -m venv venv
-# Windows
-venv\Scripts\activate
-# macOS/Linux
-source venv/bin/activate
-```
+| Component | Technology | Purpose |
+| --- | --- | --- |
+| **API Framework** | FastAPI (Python) | High-performance, async API routing. |
+| **Database** | Supabase (PostgreSQL) | Stores users, companies, competitors, and scraped intelligence. |
+| **AI / LLM** | Groq (`llama-3.3-70b-versatile`) | Rapid semantic reasoning, scoring, and strategy brief generation. |
+| **Scraping** | Jina Reader API | Bypasses paywalls and extracts clean markdown from raw URLs. |
+| **Search** | Exa AI / Serper / NewsAPI | Discovers competitor domains and monitors daily news events. |
 
-### 3. Install dependencies
+---
 
-```bash
-pip install -r requirements.txt
-```
+## ✨ Core Features
 
-### 4. Install Playwright browser (required by Crawl4AI)
+- 🕵️ **Automated Competitor Discovery:** Enter your company description, and the AI autonomously finds and ranks up to 10 relevant market rivals.
+- 📡 **Live News Monitoring:** Scheduled background jobs that scan the web for recent competitor activity (product launches, pricing changes, PR announcements).
+- 🧠 **AI Strategy Briefs:** Synthesizes hundreds of intelligence documents from the past 7 days into a comprehensive report outlining threats, opportunities, and strategic recommendations.
+- ⚡ **Asynchronous Pipelines:** Robust background processing utilizing `asyncio` to prevent timeouts on long-running LLM scraping tasks.
 
-```bash
-playwright install chromium
-```
+---
 
-### 5. Configure environment
+## 🚦 Getting Started
 
+### Prerequisites
+- Python 3.10+
+- A Supabase Project
+- API Keys for Groq, Exa, Serper, and NewsAPI
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/your-username/ai-backend.git
+   cd ai-backend
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Set up the Database:**
+   Ensure your Supabase project is active and run the provided SQL migrations to create the `companies`, `competitors`, `monitoring_jobs`, `documents`, and `audit_logs` tables.
+
+### Environment Variables
+Copy the example config and fill in your keys:
 ```bash
 cp .env.example .env
 ```
-
-Edit `.env` and add your Groq API key:
-
+Inside your `.env` file:
 ```env
-GROQ_API_KEY=gsk-your-key-here
+# LLM APIs
+GROQ_API_KEY=your_groq_api_key_here
 LLM_MODEL=llama-3.3-70b-versatile
 EXTRACTION_MODEL=llama-3.1-8b-instant
+
+# Database (Supabase)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_supabase_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
+
+# Search APIs
+JINA_API_KEY=your_jina_api_key_here
+EXA_API_KEY=your_exa_api_key_here
+SERPER_API_KEY=your_serper_api_key_here
+NEWS_API_KEY=your_news_api_key_here
 ```
 
----
-
-## Running the Server
-
+### Running the Server
+Start the development server using Uvicorn:
 ```bash
-python main.py
+uvicorn main:app --reload --port 8000
 ```
-
-The API will start on **http://localhost:8000** with auto-reload enabled.
-
-Interactive API docs: **http://localhost:8000/docs**
+Visit `http://localhost:8000/docs` to view the interactive Swagger API documentation.
 
 ---
 
-## API Endpoints
+## 🔌 API Reference
 
-### Health Check
+Here are the primary endpoints exposed by the FastAPI server:
 
-```
-GET /
-```
+<details>
+<summary><b>Authentication & Onboarding</b></summary>
 
-Response:
+- `POST /api/auth/signup` - Register a new organization owner.
+- `POST /api/auth/login` - Authenticate and retrieve JWT.
+- `POST /api/company/profile` - Set the initial company profile to bootstrap discovery.
+</details>
 
-```json
-{
-  "status": "ok",
-  "service": "competitor-analysis-ai"
-}
-```
+<details>
+<summary><b>Competitor Management</b></summary>
 
-### Analyze Competitor
+- `GET /api/competitors` - Retrieve tracked competitors and their threat scores.
+- `POST /api/competitors/{id}/research` - Trigger a deep AI scrape of a specific competitor.
+- `DELETE /api/competitors/{id}` - Archive/Delete a tracked competitor.
+</details>
 
-```
-POST /analyze
-```
+<details>
+<summary><b>Intelligence & Strategy</b></summary>
 
-#### Sample Request
-
-```bash
-curl -X POST http://localhost:8000/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "company_name": "Nike",
-    "website_url": "https://www.nike.com",
-    "industry": "Athletic Footwear & Apparel",
-    "our_company_context": "We are a sustainable athletic wear D2C brand targeting Gen Z.",
-    "social_urls": {"instagram": "https://instagram.com/nike"},
-    "focus_areas": ["products", "positioning", "social"]
-  }'
-```
-
-#### Sample Response (excerpt)
-
-```json
-{
-  "company_name": "Nike",
-  "executive_summary": "Nike is a global leader in athletic footwear and apparel ...",
-  "snapshot": {
-    "Business Model": "D2C + Wholesale",
-    "Target Customer": "Athletes and lifestyle consumers aged 16-45",
-    "Price Positioning": "Premium",
-    "Distribution": "DTC website, Nike App, retail partners",
-    "Brand Tone": "Inspirational, performance-driven",
-    "Digital Maturity": "9/10 — best-in-class e-commerce, app ecosystem, and content engine"
-  },
-  "strengths": [
-    "Brand equity — globally recognized, aspirational brand with decades of athlete endorsements.",
-    "DTC flywheel — Nike.com + SNKRS app drive high-margin direct sales with deep personalization."
-  ],
-  "weaknesses": [
-    "Sustainability messaging is surface-level — opens door for authentic eco-first challengers.",
-    "Gen Z engagement relies on legacy brand equity rather than community-driven co-creation."
-  ],
-  "opportunities": [
-    "Position on radical transparency in supply chain — Nike's sustainability page is generic.",
-    "Build a TikTok-native brand voice — Nike's social is polished but not participatory."
-  ],
-  "threats": [
-    "Nike's DTC push means they're investing billions in the same channel we need — Severity: High.",
-    "Athlete endorsement deals create cultural moats that are expensive to replicate — Severity: Med."
-  ],
-  "swot": {
-    "Strengths": ["..."],
-    "Weaknesses": ["..."],
-    "Opportunities": ["..."],
-    "Threats": ["..."]
-  },
-  "next_steps": [
-    {
-      "priority": "P0 (this week)",
-      "action": "Audit our sustainability claims page vs. Nike's",
-      "rationale": "Nike's page is generic — we can differentiate with specifics",
-      "owner_suggestion": "Marketing",
-      "expected_impact": "Unique positioning angle, medium brand lift"
-    }
-  ],
-  "differentiation_strategy": "Position as the anti-Nike: small-batch, transparent, community-owned ...",
-  "full_markdown_report": "# Competitive Intelligence Report: Nike\n...",
-  "generated_at": "2026-07-29T11:00:00Z"
-}
-```
+- `GET /api/intelligence/feed` - Infinite scrolling feed of recent competitor news events.
+- `GET /api/intelligence/strategy-brief` - Retrieve the latest weekly AI executive summary.
+- `POST /api/intelligence/generate-summary` - Force a manual generation of the Strategy Brief.
+</details>
 
 ---
 
-## How It Works
+## ⚙️ Background Workers
+Because web scraping and LLM processing take time, the system heavily relies on `asyncio.create_task()`. Long-running tasks like `generate_strategy_brief` are managed safely in memory using an `_active_background_tasks` set to prevent early Python Garbage Collection during API responses. 
 
-1. **Scrape** — Crawl4AI fetches the competitor's website (and optionally social pages) using a headless Chromium browser.
-2. **Extract** — Llama 3.1 8B (via Groq) parses the raw Markdown into structured business signals (products, pricing, positioning, tech stack, etc.).
-3. **Analyze** — Llama 3.3 70B (via Groq) applies competitive frameworks (SWOT, Porter's) to produce actionable strategic insights.
-4. **Format** — The analysis is converted into a polished Markdown report suitable for executive review.
-5. **Deliver** — The API returns both the structured JSON and the full Markdown report. A copy is saved to `reports/`.
-
----
-
-## Configuration
-
-| Variable           | Default                      | Description                                    |
-| ------------------ | ---------------------------- | ---------------------------------------------- |
-| `GROQ_API_KEY`     | *(required)*                 | Your Groq API key                              |
-| `LLM_MODEL`        | `llama-3.3-70b-versatile`    | Model used for competitive analysis            |
-| `EXTRACTION_MODEL` | `llama-3.1-8b-instant`       | Model used for data extraction & report format |
-
----
-
-## Notes
-
-- **Social scraping** is best-effort. Most social platforms (Instagram, LinkedIn, Twitter) actively block automated scraping. The API will gracefully return empty content for blocked platforms.
-- **Content cap**: Scraped content is capped at 50,000 characters before being sent to the LLM to avoid exceeding token limits.
-- **Reports** are saved to the `reports/` directory with the naming pattern `{company-slug}_{timestamp}.md`.
-
----
-
-## License
-
-MIT
+<div align="center">
+  <i>Built with ❤️ by Amit</i>
+</div>
