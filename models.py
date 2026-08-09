@@ -185,16 +185,17 @@ class CompetitorOut(BaseModel):
     researchStatus: Optional[str] = None
 
 
-class CompetitorsListResponse(BaseModel):
-    """Response for GET /api/competitors."""
-    competitors: list[CompetitorOut]
+class CompetitorsSummary(BaseModel):
     total: int
     active: int
     archived: int
-    direct: int
-    indirect: int
-    emerging: int
     pendingReview: int
+
+
+class CompetitorsListResponse(BaseModel):
+    """Response for GET /api/competitors."""
+    competitors: list[CompetitorOut]
+    summary: CompetitorsSummary
 
 
 class ManualCompetitorRequest(BaseModel):

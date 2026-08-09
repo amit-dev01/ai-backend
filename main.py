@@ -499,7 +499,10 @@ async def get_competitors(
     """Get competitors for the user's company with filters."""
     company = get_company_profile(user_id)
     if not company:
-        return CompetitorsListResponse(competitors=[], total=0, active=0, archived=0, direct=0, indirect=0, emerging=0, pendingReview=0)
+        return CompetitorsListResponse(
+            competitors=[], 
+            summary={"total": 0, "active": 0, "archived": 0, "pendingReview": 0}
+        )
 
     company_id = str(company.get("id", ""))
     rows = get_competitors_for_company(company_id, status=status, comp_type=type, source=source, accepted=accepted)
@@ -517,13 +520,12 @@ async def get_competitors(
 
     return CompetitorsListResponse(
         competitors=competitors,
-        total=total,
-        active=active,
-        archived=archived,
-        direct=direct,
-        indirect=indirect,
-        emerging=emerging,
-        pendingReview=pending
+        summary={
+            "total": total,
+            "active": active,
+            "archived": archived,
+            "pendingReview": pending
+        }
     )
 
 
@@ -934,7 +936,7 @@ async def get_intelligence_feed_endpoint(
     return IntelligenceFeedResponse(documents=doc_outs, total=total, hasMore=has_more)
 
 
-@app.get("/api/intelligence/summary", response_model=IntelligenceSummaryResponse)
+@app.get("/api/intelligence/strategy-brief", response_model=IntelligenceSummaryResponse)
 async def get_intelligence_summary_endpoint(
     user_id: str = Depends(get_current_user)
 ) -> IntelligenceSummaryResponse:
@@ -953,7 +955,7 @@ async def get_intelligence_summary_endpoint(
     )
 
 
-@app.get("/api/intelligence/stats", response_model=IntelligenceStatsResponse)
+@app.get("/api/intelligence/competitor-stats", response_model=IntelligenceStatsResponse)
 async def get_intelligence_stats_endpoint(
     user_id: str = Depends(get_current_user)
 ) -> IntelligenceStatsResponse:
@@ -987,6 +989,18 @@ async def get_intelligence_stats_endpoint(
         byCompetitor=by_comp,
         byEventType=by_event,
     )
+
+
+@app.get("/api/intelligence/trends")
+async def get_intelligence_trends(user_id: str = Depends(get_current_user)):
+    """Mock endpoint for trends."""
+    return {"trends": []}
+
+
+@app.get("/api/intelligence/alerts")
+async def get_intelligence_alerts(user_id: str = Depends(get_current_user)):
+    """Mock endpoint for alerts."""
+    return {"alerts": []}
 
 
 @app.post("/api/intelligence/trigger-monitoring")
