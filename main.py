@@ -1034,6 +1034,30 @@ async def trigger_monitoring_endpoint(
     }
 
 
+@app.post("/api/intelligence/generate-summary")
+async def trigger_generate_summary_endpoint(
+    user_id: str = Depends(get_current_user)
+) -> dict:
+    """Manually trigger the background AI Strategy Brief generation job."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+
+    company_id = str(company.get("id", ""))
+    
+    from summarization_service import generate_strategy_brief
+    import asyncio
+    
+    task = asyncio.create_task(generate_strategy_brief(company_id))
+    _active_background_tasks.add(task)
+    task.add_done_callback(_active_background_tasks.discard)
+
+    return {
+        "status": "ok",
+        "message": "AI Strategy Brief generation started in background."
+    }
+
+
 @app.get("/api/intelligence/jobs", response_model=MonitoringJobsResponse)
 async def get_monitoring_jobs_endpoint(
     user_id: str = Depends(get_current_user)
