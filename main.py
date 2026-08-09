@@ -141,6 +141,8 @@ def _slugify(text: str) -> str:
     slug = re.sub(r"-+", "-", slug)
     return slug
 
+_active_background_tasks = set()
+
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -626,7 +628,9 @@ async def re_research_competitor(competitor_id: str, user_id: str = Depends(get_
     
     from discovery_service import re_research_competitor_background
     import asyncio
-    asyncio.create_task(re_research_competitor_background(competitor_id, company_id, comp.get("website_url"), comp.get("name")))
+    task = asyncio.create_task(re_research_competitor_background(competitor_id, company_id, comp.get("website_url"), comp.get("name")))
+    _active_background_tasks.add(task)
+    task.add_done_callback(_active_background_tasks.discard)
     
     return {"status": "ok", "message": "Research job started in background."}
 
@@ -1023,7 +1027,9 @@ async def trigger_monitoring_endpoint(
     job = create_monitoring_job(company_id=company_id, competitor_id=None, job_type="NEWS_MONITORING")
     job_id = job.get("id") if job else f"job-{int(datetime.utcnow().timestamp())}"
 
-    asyncio.create_task(CompetitorMonitoringService.runNewsMonitoring(company_id))
+    task = asyncio.create_task(CompetitorMonitoringService.runNewsMonitoring(company_id))
+    _active_background_tasks.add(task)
+    task.add_done_callback(_active_background_tasks.discard)
 
     return {
         "message": "Monitoring job started",

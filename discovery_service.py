@@ -470,10 +470,14 @@ Return this JSON structure:
             )
 
 
+_active_discovery_tasks = set()
+
 def run_competitor_discovery(company_id: str) -> None:
     """Helper function to execute CompetitorDiscoveryService in a background task."""
     service = CompetitorDiscoveryService(company_id)
-    asyncio.create_task(service.run())
+    task = asyncio.create_task(service.run())
+    _active_discovery_tasks.add(task)
+    task.add_done_callback(_active_discovery_tasks.discard)
 
 
 async def re_research_competitor_background(competitor_id: str, company_id: str, website: str, name: str) -> None:
