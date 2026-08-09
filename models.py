@@ -79,6 +79,48 @@ class CompanyProfilePayload(BaseModel):
     competitors: Optional[list[CompetitorManual]] = Field(None, description="List of known competitors")
     excludedCompetitors: Optional[list[str]] = Field(None, description="Competitors to exclude from analysis")
 
+class CompanyProfileUpdatePayload(BaseModel):
+    """Payload for updating an existing company profile."""
+    companyName: Optional[str] = Field(None, min_length=2, max_length=100)
+    website: Optional[HttpUrl] = None
+    industry: Optional[str] = Field(None, min_length=1)
+    description: Optional[str] = Field(None, min_length=10, max_length=1000)
+    companyStage: Optional[str] = None
+    companySize: Optional[str] = None
+    businessType: Optional[str] = None
+    customerSegments: Optional[list[str]] = None
+    geographicMarkets: Optional[list[str]] = None
+    productsOrServices: Optional[str] = None
+    primaryProblemSolved: Optional[str] = None
+
+class CompanySettingsOut(BaseModel):
+    monitoringEnabled: bool
+    emailDigestEnabled: bool
+    criticalAlertsEnabled: bool
+    maxCompetitorsMonitored: int
+    discoveryRunCount: int
+    lastDiscoveryAt: Optional[str] = None
+    activeCompetitors: int
+    archivedCompetitors: int
+
+class CompanySettingsUpdatePayload(BaseModel):
+    monitoringEnabled: Optional[bool] = None
+    emailDigestEnabled: Optional[bool] = None
+    criticalAlertsEnabled: Optional[bool] = None
+    maxCompetitorsMonitored: Optional[int] = Field(None, ge=1, le=25)
+
+class AuditLogOut(BaseModel):
+    id: str
+    action: str
+    entityType: str
+    entityId: str
+    metadata: dict[str, Any] = {}
+    createdAt: str
+
+class AuditLogResponse(BaseModel):
+    activities: list[AuditLogOut]
+    total: int
+
 class CompanyProfileResponseCompany(BaseModel):
     id: str
     companyName: str
@@ -135,21 +177,37 @@ class CompetitorOut(BaseModel):
     businessModelOverlap: Optional[int] = None
     reason: Optional[str] = None
     isAccepted: Optional[bool] = None
+    isActive: Optional[bool] = None
+    customType: Optional[str] = None
+    effectiveType: Optional[str] = None
+    notes: Optional[str] = None
+    lastResearchedAt: Optional[str] = None
+    researchStatus: Optional[str] = None
 
 
 class CompetitorsListResponse(BaseModel):
     """Response for GET /api/competitors."""
     competitors: list[CompetitorOut]
     total: int
+    active: int
+    archived: int
     direct: int
     indirect: int
     emerging: int
+    pendingReview: int
 
 
 class ManualCompetitorRequest(BaseModel):
     """Body for POST /api/competitors/manual."""
     name: str = Field(..., description="Name of the competitor")
     website: str = Field(..., description="Website URL of the competitor")
+
+class CompetitorEditPayload(BaseModel):
+    """Body for PUT /api/competitors/{id}"""
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    website: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=500)
+    customType: Optional[str] = None
 
 
 # --- Intelligence Monitoring Models ---

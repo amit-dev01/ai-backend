@@ -13,7 +13,8 @@ from typing import Optional
 import search_service
 from scraper import scrape_website
 from database import (
-    get_accepted_competitors_for_company,
+    get_company_profile_by_id,
+    get_competitors_for_company,
     get_url_cache,
     upsert_url_cache,
     create_monitoring_job,
@@ -54,9 +55,19 @@ class CompetitorMonitoringService:
         documents_processed = 0
 
         try:
-            competitors = get_accepted_competitors_for_company(company_id)
+            company = get_company_profile_by_id(company_id)
+            if not company or not company.get("monitoring_enabled", True):
+                logger.info("Monitoring disabled or company not found for %s. Finishing job.", company_id)
+                if job_id:
+                    update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0)
+                return job
+
+            max_comps = company.get("max_competitors_monitored", 10)
+            competitors = get_competitors_for_company(company_id, status="active", accepted="true")
+            competitors = competitors[:max_comps]
+            
             if not competitors:
-                logger.info("No accepted competitors found for company %s. Finishing job.", company_id)
+                logger.info("No active accepted competitors found for company %s. Finishing job.", company_id)
                 if job_id:
                     update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0)
                 return job
@@ -159,9 +170,19 @@ class CompetitorMonitoringService:
         documents_processed = 0
 
         try:
-            competitors = get_accepted_competitors_for_company(company_id)
+            company = get_company_profile_by_id(company_id)
+            if not company or not company.get("monitoring_enabled", True):
+                logger.info("Monitoring disabled or company not found for %s. Finishing job.", company_id)
+                if job_id:
+                    update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0)
+                return job
+
+            max_comps = company.get("max_competitors_monitored", 10)
+            competitors = get_competitors_for_company(company_id, status="active", accepted="true")
+            competitors = competitors[:max_comps]
+            
             if not competitors:
-                logger.info("No accepted competitors found for company %s. Finishing job.", company_id)
+                logger.info("No active accepted competitors found for company %s. Finishing job.", company_id)
                 if job_id:
                     update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0)
                 return job

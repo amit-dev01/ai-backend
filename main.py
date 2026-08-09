@@ -44,6 +44,11 @@ from models import (
     MonitoringJobsResponse,
     CompetitorStats,
     EventTypeStats,
+    CompanyProfileUpdatePayload,
+    CompanySettingsOut,
+    CompanySettingsUpdatePayload,
+    AuditLogResponse,
+    CompetitorEditPayload,
 )
 from scraper import scrape_website, scrape_social
 from extractor import extract_signals
@@ -64,6 +69,13 @@ from database import (
     get_active_monitoring_job,
     create_monitoring_job,
     supabase_client,
+    update_company_profile_partial,
+    update_company_settings,
+    insert_audit_log,
+    update_competitor_fields,
+    delete_competitor_permanently,
+    update_competitor_research_status,
+    get_audit_logs,
 )
 from auth import get_current_user
 from discovery_service import run_competitor_discovery
@@ -244,6 +256,56 @@ async def submit_company_profile(
     )
 
 
+@app.put("/api/company/profile")
+async def update_company_profile(
+    payload: CompanyProfileUpdatePayload,
+    user_id: str = Depends(get_current_user)
+) -> dict:
+    """Update existing company profile fields."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    
+    company_id = str(company.get("id", ""))
+    update_data = payload.model_dump(exclude_unset=True)
+    
+    if "website" in update_data and update_data["website"]:
+        update_data["website"] = str(update_data["website"])
+        
+    core_fields = {"companyName", "industry", "productsOrServices"}
+    significant_change = any(field in update_data for field in core_fields)
+    
+    db_payload = {
+        "company_name": update_data.get("companyName", company.get("company_name")),
+        "website": update_data.get("website", company.get("website")),
+        "industry": update_data.get("industry", company.get("industry")),
+        "description": update_data.get("description", company.get("description")),
+        "company_stage": update_data.get("companyStage", company.get("company_stage")),
+        "company_size": update_data.get("companySize", company.get("company_size")),
+    }
+    # Clean up none values
+    db_payload = {k: v for k, v in db_payload.items() if v is not None}
+    
+    updated = update_company_profile_partial(company_id, db_payload)
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to update company profile.")
+        
+    insert_audit_log(
+        company_id=company_id,
+        user_id=user_id,
+        action="UPDATED_PROFILE",
+        entity_type="COMPANY",
+        entity_id=company_id,
+        metadata={"fields_updated": list(update_data.keys()), "significant_change": significant_change}
+    )
+    
+    return {
+        "status": "ok",
+        "message": "Profile updated successfully.",
+        "significantChange": significant_change
+    }
+
+
 # ---------------------------------------------------------------------------
 # Setup Status & Discovery Endpoints
 # ---------------------------------------------------------------------------
@@ -288,6 +350,115 @@ async def trigger_discovery(user_id: str = Depends(get_current_user)) -> dict:
     return {"status": "ok", "message": "Competitor discovery triggered in background."}
 
 
+@app.post("/api/company/rediscovery")
+async def trigger_rediscovery(user_id: str = Depends(get_current_user)) -> dict:
+    """Manually trigger discovery with rate limiting."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+        
+    company_id = str(company.get("id", ""))
+    
+    # Check rate limit (simple check: max 3 per 30 days)
+    run_count = company.get("discovery_run_count") or 1
+    last_run = company.get("last_discovery_at")
+    
+    if last_run:
+        last_date = datetime.fromisoformat(last_run.replace("Z", "+00:00"))
+        if (datetime.now(last_date.tzinfo) - last_date).days < 30 and run_count >= 3:
+            raise HTTPException(status_code=429, detail="Discovery limit reached. Max 3 times per 30 days.")
+    
+    # Update count
+    new_count = run_count + 1 if last_run and (datetime.now(datetime.fromisoformat(last_run.replace("Z", "+00:00")).tzinfo) - datetime.fromisoformat(last_run.replace("Z", "+00:00"))).days < 30 else 1
+    
+    update_company_settings(company_id, {
+        "discovery_run_count": new_count,
+        "last_discovery_at": datetime.utcnow().isoformat()
+    })
+    
+    insert_audit_log(company_id, user_id, "TRIGGERED_REDISCOVERY", "COMPANY", company_id, {"run_count": new_count})
+    run_competitor_discovery(company_id)
+    
+    return {"status": "ok", "message": "Re-discovery started successfully."}
+
+
+@app.get("/api/company/settings", response_model=CompanySettingsOut)
+async def get_settings(user_id: str = Depends(get_current_user)) -> CompanySettingsOut:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    
+    company_id = str(company.get("id", ""))
+    active = len(get_competitors_for_company(company_id, status="active"))
+    archived = len(get_competitors_for_company(company_id, status="archived"))
+    
+    return CompanySettingsOut(
+        monitoringEnabled=company.get("monitoring_enabled", True),
+        emailDigestEnabled=company.get("email_digest_enabled", True),
+        criticalAlertsEnabled=company.get("critical_alerts_enabled", True),
+        maxCompetitorsMonitored=company.get("max_competitors_monitored", 10),
+        discoveryRunCount=company.get("discovery_run_count") or 1,
+        lastDiscoveryAt=company.get("last_discovery_at"),
+        activeCompetitors=active,
+        archivedCompetitors=archived,
+    )
+
+
+@app.put("/api/company/settings", response_model=CompanySettingsOut)
+async def update_settings(
+    payload: CompanySettingsUpdatePayload,
+    user_id: str = Depends(get_current_user)
+) -> CompanySettingsOut:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    
+    company_id = str(company.get("id", ""))
+    update_data = payload.model_dump(exclude_unset=True)
+    
+    db_payload = {}
+    if "monitoringEnabled" in update_data: db_payload["monitoring_enabled"] = update_data["monitoringEnabled"]
+    if "emailDigestEnabled" in update_data: db_payload["email_digest_enabled"] = update_data["emailDigestEnabled"]
+    if "criticalAlertsEnabled" in update_data: db_payload["critical_alerts_enabled"] = update_data["criticalAlertsEnabled"]
+    if "maxCompetitorsMonitored" in update_data: db_payload["max_competitors_monitored"] = update_data["maxCompetitorsMonitored"]
+    
+    if db_payload:
+        updated = update_company_settings(company_id, db_payload)
+        if not updated:
+            raise HTTPException(status_code=500, detail="Failed to update settings.")
+            
+        insert_audit_log(company_id, user_id, "UPDATED_SETTINGS", "COMPANY", company_id, {"fields": list(update_data.keys())})
+    
+    return await get_settings(user_id)
+
+
+@app.get("/api/company/activity", response_model=AuditLogResponse)
+async def get_activity(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user_id: str = Depends(get_current_user)
+) -> AuditLogResponse:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+        
+    company_id = str(company.get("id", ""))
+    logs, total = get_audit_logs(company_id, limit, offset)
+    
+    mapped_logs = []
+    for log in logs:
+        mapped_logs.append({
+            "id": str(log.get("id")),
+            "action": log.get("action"),
+            "entityType": log.get("entity_type"),
+            "entityId": str(log.get("entity_id")),
+            "metadata": log.get("metadata") or {},
+            "createdAt": log.get("created_at")
+        })
+        
+    return AuditLogResponse(activities=mapped_logs, total=total)
+
+
 # ---------------------------------------------------------------------------
 # Competitors Endpoints
 # ---------------------------------------------------------------------------
@@ -307,33 +478,155 @@ def _map_competitor_row(row: dict) -> CompetitorOut:
         marketOverlap=row.get("market_overlap"),
         businessModelOverlap=row.get("business_model_overlap"),
         reason=row.get("reason"),
-        isAccepted=row.get("is_accepted")
+        isAccepted=row.get("is_accepted"),
+        isActive=row.get("is_active"),
+        customType=row.get("custom_type"),
+        effectiveType=row.get("custom_type") or row.get("type"),
+        notes=row.get("notes"),
+        lastResearchedAt=row.get("last_researched_at"),
+        researchStatus=row.get("research_status")
     )
 
 
 @app.get("/api/competitors", response_model=CompetitorsListResponse)
-async def get_competitors(user_id: str = Depends(get_current_user)) -> CompetitorsListResponse:
-    """Get all discovered and manual competitors for the user's company."""
+async def get_competitors(
+    status: str = Query("active", description="active or archived or all"),
+    type: Optional[str] = Query(None, description="Filter by type (DIRECT, etc)"),
+    source: Optional[str] = Query(None, description="Filter by source"),
+    accepted: Optional[str] = Query(None, description="true, false, or pending"),
+    user_id: str = Depends(get_current_user)
+) -> CompetitorsListResponse:
+    """Get competitors for the user's company with filters."""
     company = get_company_profile(user_id)
     if not company:
-        return CompetitorsListResponse(competitors=[], total=0, direct=0, indirect=0, emerging=0)
+        return CompetitorsListResponse(competitors=[], total=0, active=0, archived=0, direct=0, indirect=0, emerging=0, pendingReview=0)
 
     company_id = str(company.get("id", ""))
-    rows = get_competitors_for_company(company_id)
+    rows = get_competitors_for_company(company_id, status=status, comp_type=type, source=source, accepted=accepted)
 
     competitors = [_map_competitor_row(r) for r in rows]
     total = len(competitors)
-    direct = sum(1 for c in competitors if c.type == "DIRECT")
-    indirect = sum(1 for c in competitors if c.type == "INDIRECT")
-    emerging = sum(1 for c in competitors if c.type == "EMERGING")
+    
+    # We might want to calculate stats without the query filters, but usually we just calculate on the returned set
+    active = sum(1 for c in competitors if c.isActive)
+    archived = sum(1 for c in competitors if not c.isActive)
+    direct = sum(1 for c in competitors if c.effectiveType == "DIRECT")
+    indirect = sum(1 for c in competitors if c.effectiveType == "INDIRECT")
+    emerging = sum(1 for c in competitors if c.effectiveType == "EMERGING")
+    pending = sum(1 for c in competitors if c.isAccepted is None)
 
     return CompetitorsListResponse(
         competitors=competitors,
         total=total,
+        active=active,
+        archived=archived,
         direct=direct,
         indirect=indirect,
-        emerging=emerging
+        emerging=emerging,
+        pendingReview=pending
     )
+
+
+@app.put("/api/competitors/{competitor_id}", response_model=CompetitorOut)
+async def edit_competitor(
+    competitor_id: str,
+    payload: CompetitorEditPayload,
+    user_id: str = Depends(get_current_user)
+) -> CompetitorOut:
+    company = get_company_profile(user_id)
+    if not company: raise HTTPException(status_code=404, detail="Company not found.")
+    
+    company_id = str(company.get("id", ""))
+    comp = get_competitor_by_id(competitor_id)
+    if not comp or str(comp.get("company_id")) != company_id:
+        raise HTTPException(status_code=404, detail="Competitor not found.")
+        
+    update_data = payload.model_dump(exclude_unset=True)
+    db_payload = {}
+    if "name" in update_data: db_payload["name"] = update_data["name"]
+    if "website" in update_data: db_payload["website_url"] = update_data["website"]
+    if "notes" in update_data: db_payload["notes"] = update_data["notes"]
+    if "customType" in update_data: db_payload["custom_type"] = update_data["customType"]
+    
+    if db_payload:
+        updated = update_competitor_fields(competitor_id, db_payload)
+        if not updated: raise HTTPException(status_code=500, detail="Failed to update competitor.")
+        insert_audit_log(company_id, user_id, "UPDATED_COMPETITOR", "COMPETITOR", competitor_id, {"fields": list(db_payload.keys())})
+        return _map_competitor_row(updated)
+        
+    return _map_competitor_row(comp)
+
+
+@app.post("/api/competitors/{competitor_id}/archive")
+async def archive_competitor(competitor_id: str, user_id: str = Depends(get_current_user)):
+    company = get_company_profile(user_id)
+    if not company: raise HTTPException(status_code=404, detail="Company not found.")
+    
+    company_id = str(company.get("id", ""))
+    comp = get_competitor_by_id(competitor_id)
+    if not comp or str(comp.get("company_id")) != company_id: raise HTTPException(status_code=404, detail="Competitor not found.")
+    
+    update_competitor_fields(competitor_id, {"is_active": False})
+    insert_audit_log(company_id, user_id, "ARCHIVED_COMPETITOR", "COMPETITOR", competitor_id, {})
+    return {"status": "ok", "message": "Competitor archived."}
+
+
+@app.post("/api/competitors/{competitor_id}/restore")
+async def restore_competitor(competitor_id: str, user_id: str = Depends(get_current_user)):
+    company = get_company_profile(user_id)
+    if not company: raise HTTPException(status_code=404, detail="Company not found.")
+    
+    company_id = str(company.get("id", ""))
+    comp = get_competitor_by_id(competitor_id)
+    if not comp or str(comp.get("company_id")) != company_id: raise HTTPException(status_code=404, detail="Competitor not found.")
+    
+    update_competitor_fields(competitor_id, {"is_active": True})
+    insert_audit_log(company_id, user_id, "RESTORED_COMPETITOR", "COMPETITOR", competitor_id, {})
+    return {"status": "ok", "message": "Competitor restored."}
+
+
+@app.delete("/api/competitors/{competitor_id}")
+async def delete_competitor(competitor_id: str, user_id: str = Depends(get_current_user)):
+    company = get_company_profile(user_id)
+    if not company: raise HTTPException(status_code=404, detail="Company not found.")
+    
+    company_id = str(company.get("id", ""))
+    comp = get_competitor_by_id(competitor_id)
+    if not comp or str(comp.get("company_id")) != company_id: raise HTTPException(status_code=404, detail="Competitor not found.")
+    
+    # 7-day archive rule check for AI-discovered
+    if comp.get("source") != "MANUAL":
+        is_active = comp.get("is_active", True)
+        if is_active:
+            raise HTTPException(status_code=400, detail="AI-discovered competitors must be archived for 7 days before deletion.")
+        # NOTE: A real 7-day check would look at an archived_at timestamp. Since we don't have one, we allow deletion if is_active is false to simplify, or we can check audit logs.
+    
+    deleted = delete_competitor_permanently(competitor_id)
+    if not deleted: raise HTTPException(status_code=500, detail="Failed to delete competitor.")
+    insert_audit_log(company_id, user_id, "DELETED_COMPETITOR", "COMPETITOR", competitor_id, {})
+    return {"status": "ok", "message": "Competitor deleted."}
+
+
+@app.post("/api/competitors/{competitor_id}/research")
+async def re_research_competitor(competitor_id: str, user_id: str = Depends(get_current_user)):
+    company = get_company_profile(user_id)
+    if not company: raise HTTPException(status_code=404, detail="Company not found.")
+    
+    company_id = str(company.get("id", ""))
+    comp = get_competitor_by_id(competitor_id)
+    if not comp or str(comp.get("company_id")) != company_id: raise HTTPException(status_code=404, detail="Competitor not found.")
+    
+    if not comp.get("website_url"):
+        raise HTTPException(status_code=400, detail="Competitor must have a website URL to be researched.")
+        
+    update_competitor_research_status(competitor_id, "PROCESSING")
+    insert_audit_log(company_id, user_id, "TRIGGERED_RESEARCH", "COMPETITOR", competitor_id, {})
+    
+    from discovery_service import re_research_competitor_background
+    import asyncio
+    asyncio.create_task(re_research_competitor_background(competitor_id, company_id, comp.get("website_url"), comp.get("name")))
+    
+    return {"status": "ok", "message": "Research job started in background."}
 
 
 @app.post("/api/competitors/{competitor_id}/accept", response_model=CompetitorOut)

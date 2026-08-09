@@ -474,3 +474,103 @@ def run_competitor_discovery(company_id: str) -> None:
     """Helper function to execute CompetitorDiscoveryService in a background task."""
     service = CompetitorDiscoveryService(company_id)
     asyncio.create_task(service.run())
+
+
+async def re_research_competitor_background(competitor_id: str, company_id: str, website: str, name: str) -> None:
+    """Background job to re-research a competitor (scrape, extract, rescore)."""
+    from database import (
+        update_competitor_research_status,
+        update_competitor_fields,
+        get_company_profile_by_id,
+        insert_audit_log
+    )
+    try:
+        content = await scrape_website(website)
+        company = get_company_profile_by_id(company_id) or {}
+        company_name = company.get("company_name", "")
+        industry = company.get("industry", "")
+        description = company.get("description", "")
+        products_raw = company.get("products_or_services", [])
+        products_str = ", ".join(products_raw) if isinstance(products_raw, list) else str(products_raw)
+        customer_segments = company.get("target_customers", "")
+        primary_problem = description
+        business_type = company.get("company_stage") or company.get("company_size") or "B2B"
+
+        profile_prompt = f"""You are analyzing a company website to extract structured information. Return only valid JSON, no explanation, no markdown.
+
+Extract this structure:
+{{
+  "companyName": "{name}",
+  "website": "{website}",
+  "description": string of 2 to 3 sentences maximum,
+  "mainProduct": string,
+  "targetCustomers": array of strings,
+  "industry": string,
+  "businessModel": one of B2B or B2C or Both or Unknown,
+  "isActualCompany": true
+}}
+
+Website content:
+{content[:3000]}"""
+
+        parsed_profile = await _call_groq_json(profile_prompt)
+        cand_desc = parsed_profile.get("description", f"Competitor entry for {name}.")
+        cand_prod = parsed_profile.get("mainProduct") or ""
+        cand_cust = parsed_profile.get("targetCustomers") or []
+        cand_cust_str = ", ".join(cand_cust) if isinstance(cand_cust, list) else str(cand_cust)
+        cand_ind = parsed_profile.get("industry") or ""
+        cand_bm = parsed_profile.get("businessModel") or "Unknown"
+
+        score_prompt = f"""You are a competitive intelligence analyst. Compare these two companies and score their competitive overlap. Return only valid JSON, no explanation, no markdown.
+
+OUR COMPANY:
+Name: {company_name}
+Industry: {industry}
+Description: {description}
+Products: {products_str}
+Target Customers: {customer_segments}
+Problem Solved: {primary_problem}
+Business Type: {business_type}
+
+CANDIDATE COMPETITOR:
+Name: {name}
+Description: {cand_desc}
+Main Product: {cand_prod}
+Target Customers: {cand_cust_str}
+Industry: {cand_ind}
+Business Model: {cand_bm}
+
+Return this JSON structure:
+{{
+  "productSimilarity": integer 0 to 100,
+  "customerOverlap": integer 0 to 100,
+  "marketOverlap": integer 0 to 100,
+  "businessModelOverlap": integer 0 to 100,
+  "overallScore": integer 0 to 100,
+  "competitorType": one of DIRECT or INDIRECT or EMERGING,
+  "reason": string of 2 to 3 sentences explaining why they are a competitor,
+  "confidenceScore": integer 0 to 100
+}}"""
+
+        score_res = await _call_groq_json(score_prompt)
+
+        update_data = {
+            "description": cand_desc,
+            "type": score_res.get("competitorType", "DIRECT"),
+            "product_similarity": int(score_res.get("productSimilarity", 50)),
+            "customer_overlap": int(score_res.get("customerOverlap", 50)),
+            "market_overlap": int(score_res.get("marketOverlap", 50)),
+            "business_model_overlap": int(score_res.get("businessModelOverlap", 50)),
+            "competitive_score": int(score_res.get("overallScore", 50)),
+            "confidence_score": int(score_res.get("confidenceScore", 80)),
+            "reason": score_res.get("reason", f"Researched competitor {name}."),
+        }
+        
+        update_competitor_fields(competitor_id, update_data)
+        update_competitor_research_status(competitor_id, "IDLE")
+        logger.info("Re-research complete for competitor ID: %s", competitor_id)
+        
+    except Exception as exc:
+        logger.warning("Re-research failed for competitor %s: %s", competitor_id, str(exc))
+        from database import update_competitor_research_status
+        update_competitor_research_status(competitor_id, "FAILED")
