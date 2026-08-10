@@ -760,6 +760,8 @@ def create_monitoring_job(company_id: str, competitor_id: Optional[str], job_typ
         "competitor_id": competitor_id,
         "job_type": job_type,
         "status": "RUNNING",
+        "progress": 0,
+        "current_step": "Starting check...",
         "documents_found": 0,
         "documents_processed": 0,
         "started_at": now_str,
@@ -779,6 +781,8 @@ def update_monitoring_job(
     status: str,
     documents_found: int,
     documents_processed: int,
+    progress: int = 0,
+    current_step: str = "",
     error: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     """Update monitoring job status and counters."""
@@ -789,9 +793,12 @@ def update_monitoring_job(
         "status": status,
         "documents_found": documents_found,
         "documents_processed": documents_processed,
-        "completed_at": now_str,
+        "progress": progress,
+        "current_step": current_step,
         "error": error,
     }
+    if status in ("COMPLETED", "FAILED"):
+        payload["completed_at"] = now_str
     try:
         result = (
             supabase_client.table("monitoring_jobs")

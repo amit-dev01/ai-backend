@@ -16,7 +16,7 @@ from pathlib import Path
 
 from typing import Optional
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import sys
@@ -42,6 +42,8 @@ from models import (
     IntelligenceStatsResponse,
     MonitoringJobOut,
     MonitoringJobsResponse,
+    CheckNowResponse,
+    CheckStatusResponse,
     CompetitorStats,
     EventTypeStats,
     CompanyProfileUpdatePayload,
@@ -80,7 +82,7 @@ from database import (
 from auth import get_current_user
 from discovery_service import run_competitor_discovery
 from competitor_monitoring_service import CompetitorMonitoringService
-from scheduler import start_scheduler, stop_scheduler
+from manual_monitoring import run_manual_monitoring_job
 
 
 # ---------------------------------------------------------------------------
@@ -116,14 +118,11 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Initializing background scheduled cron jobs...")
-    start_scheduler()
-
+    pass
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    logger.info("Shutting down background scheduler...")
-    stop_scheduler()
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -1077,6 +1076,8 @@ async def get_monitoring_jobs_endpoint(
                 id=str(j.get("id", "")),
                 jobType=j.get("job_type", "NEWS_MONITORING"),
                 status=j.get("status", "COMPLETED"),
+                progress=j.get("progress", 0),
+                currentStep=j.get("current_step", ""),
                 documentsFound=j.get("documents_found", 0),
                 documentsProcessed=j.get("documents_processed", 0),
                 startedAt=j.get("started_at"),
@@ -1086,6 +1087,76 @@ async def get_monitoring_jobs_endpoint(
         )
 
     return MonitoringJobsResponse(jobs=job_outs)
+
+
+# ---------------------------------------------------------------------------
+# Manual Monitoring Flow
+# ---------------------------------------------------------------------------
+
+@app.post("/api/intelligence/check-now", response_model=CheckNowResponse)
+async def trigger_manual_check(
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user)
+) -> CheckNowResponse:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    
+    company_id = str(company.get("id", ""))
+    
+    active_job = get_active_monitoring_job(company_id)
+    if active_job:
+        raise HTTPException(status_code=409, detail="A check is already in progress")
+        
+    job = create_monitoring_job(company_id=company_id, competitor_id=None, job_type="MANUAL_CHECK")
+    if not job:
+        raise HTTPException(status_code=500, detail="Failed to create monitoring job")
+        
+    job_id = str(job.get("id"))
+    background_tasks.add_task(run_manual_monitoring_job, company_id, job_id)
+    
+    return CheckNowResponse(
+        message="Check started",
+        jobId=job_id,
+        status="RUNNING"
+    )
+
+@app.get("/api/intelligence/check-status", response_model=CheckStatusResponse)
+async def get_manual_check_status(
+    user_id: str = Depends(get_current_user)
+) -> CheckStatusResponse:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    
+    company_id = str(company.get("id", ""))
+    jobs_rows = get_monitoring_jobs_history(company_id, limit=1)
+    
+    if not jobs_rows:
+        return CheckStatusResponse(
+            jobId=None,
+            status="IDLE",
+            progress=0,
+            currentStep="No checks run yet",
+            documentsFound=0,
+            documentsProcessed=0,
+            startedAt=None,
+            completedAt=None,
+            error=None
+        )
+        
+    j = jobs_rows[0]
+    return CheckStatusResponse(
+        jobId=str(j.get("id", "")),
+        status=j.get("status", "IDLE"),
+        progress=j.get("progress", 0),
+        currentStep=j.get("current_step", ""),
+        documentsFound=j.get("documents_found", 0),
+        documentsProcessed=j.get("documents_processed", 0),
+        startedAt=j.get("started_at"),
+        completedAt=j.get("completed_at"),
+        error=j.get("error")
+    )
 
 
 # ---------------------------------------------------------------------------

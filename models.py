@@ -274,6 +274,24 @@ class MonitoringJobOut(BaseModel):
     id: str
     jobType: str
     status: str
+    progress: int = 0
+    currentStep: str = ""
+    documentsFound: int
+    documentsProcessed: int
+    startedAt: Optional[str] = None
+    completedAt: Optional[str] = None
+    error: Optional[str] = None
+
+class CheckNowResponse(BaseModel):
+    message: str
+    jobId: str
+    status: str
+
+class CheckStatusResponse(BaseModel):
+    jobId: Optional[str]
+    status: str
+    progress: int
+    currentStep: str
     documentsFound: int
     documentsProcessed: int
     startedAt: Optional[str] = None
