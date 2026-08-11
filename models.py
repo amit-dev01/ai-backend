@@ -102,12 +102,14 @@ class CompanySettingsOut(BaseModel):
     lastDiscoveryAt: Optional[str] = None
     activeCompetitors: int
     archivedCompetitors: int
+    jiraDomain: Optional[str] = None
 
 class CompanySettingsUpdatePayload(BaseModel):
     monitoringEnabled: Optional[bool] = None
     emailDigestEnabled: Optional[bool] = None
     criticalAlertsEnabled: Optional[bool] = None
     maxCompetitorsMonitored: Optional[int] = Field(None, ge=1, le=25)
+    jiraDomain: Optional[str] = Field(None, description="Just the subdomain part without .atlassian.net")
 
 class AuditLogOut(BaseModel):
     id: str
@@ -302,3 +304,275 @@ class CheckStatusResponse(BaseModel):
 class MonitoringJobsResponse(BaseModel):
     jobs: list[MonitoringJobOut]
 
+
+# --- Task Models ---
+
+class TaskOut(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    recommendedSteps: Optional[str] = None
+    priority: str
+    status: str
+    category: Optional[str] = None
+    sourceType: str
+    competitorId: Optional[str] = None
+    competitorName: Optional[str] = None
+    eventType: Optional[str] = None
+    impactScore: Optional[int] = None
+    jiraIssueUrl: Optional[str] = None
+    dueDate: Optional[str] = None
+    completedAt: Optional[str] = None
+    dismissedAt: Optional[str] = None
+    dismissedReason: Optional[str] = None
+    createdAt: Optional[str] = None
+    updatedAt: Optional[str] = None
+
+class TasksResponse(BaseModel):
+    tasks: list[TaskOut]
+    total: int
+    todo: int
+    inProgress: int
+    done: int
+    dismissed: int
+    critical: int
+    high: int
+    medium: int
+    low: int
+
+class TaskCreatePayload(BaseModel):
+    title: str = Field(..., min_length=2, max_length=80)
+    description: Optional[str] = None
+    recommendedSteps: Optional[str] = None
+    priority: str = Field("HIGH")
+    category: str = Field("CUSTOM")
+    competitorId: Optional[str] = None
+    dueDate: Optional[str] = None
+
+class TaskUpdatePayload(BaseModel):
+    title: Optional[str] = Field(None, min_length=2, max_length=80)
+    description: Optional[str] = None
+    recommendedSteps: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    category: Optional[str] = None
+    dueDate: Optional[str] = None
+    jiraIssueUrl: Optional[str] = None
+
+class TaskStatusUpdatePayload(BaseModel):
+    status: str = Field(...)
+    dismissedReason: Optional[str] = None
+
+class TaskStatsResponse(BaseModel):
+    totalActive: int
+    critical: int
+    competitiveScore: Optional[int] = None
+    confidenceScore: Optional[int] = None
+    productSimilarity: Optional[int] = None
+    customerOverlap: Optional[int] = None
+    marketOverlap: Optional[int] = None
+    businessModelOverlap: Optional[int] = None
+    reason: Optional[str] = None
+    isAccepted: Optional[bool] = None
+    isActive: Optional[bool] = None
+    customType: Optional[str] = None
+    effectiveType: Optional[str] = None
+    notes: Optional[str] = None
+    lastResearchedAt: Optional[str] = None
+    researchStatus: Optional[str] = None
+
+
+class CompetitorsSummary(BaseModel):
+    total: int
+    active: int
+    archived: int
+    pendingReview: int
+
+
+class CompetitorsListResponse(BaseModel):
+    """Response for GET /api/competitors."""
+    competitors: list[CompetitorOut]
+    summary: CompetitorsSummary
+
+
+class ManualCompetitorRequest(BaseModel):
+    """Body for POST /api/competitors/manual."""
+    name: str = Field(..., description="Name of the competitor")
+    website: str = Field(..., description="Website URL of the competitor")
+
+class CompetitorEditPayload(BaseModel):
+    """Body for PUT /api/competitors/{id}"""
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    website: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=500)
+    customType: Optional[str] = None
+
+
+# --- Intelligence Monitoring Models ---
+
+class IntelligenceDocumentOut(BaseModel):
+    id: str
+    competitorId: str
+    competitorName: Optional[str] = None
+    sourceUrl: str
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    eventType: Optional[str] = None
+    sentiment: Optional[str] = None
+    sentimentConfidence: Optional[int] = None
+    relevanceScore: Optional[int] = None
+    relevanceReason: Optional[str] = None
+    impactScore: Optional[int] = None
+    impactLabel: Optional[str] = None
+    publishedDate: Optional[str] = None
+    createdAt: Optional[str] = None
+
+
+class IntelligenceFeedResponse(BaseModel):
+    documents: list[IntelligenceDocumentOut]
+    total: int
+    hasMore: bool
+
+
+class IntelligenceSummaryResponse(BaseModel):
+    weeklyBrief: Optional[str] = None
+    topThreats: list[dict[str, Any]] = []
+    opportunities: list[dict[str, Any]] = []
+    watchList: list[str] = []
+    strategicRecommendations: list[str] = []
+    generatedAt: Optional[str] = None
+
+
+class CompetitorStats(BaseModel):
+    competitorId: str
+    competitorName: str
+    documentCount: int
+    latestEvent: Optional[str] = None
+    latestEventDate: Optional[str] = None
+
+
+class EventTypeStats(BaseModel):
+    eventType: str
+    count: int
+
+
+class IntelligenceStatsResponse(BaseModel):
+    totalDocuments: int
+    documentsThisWeek: int
+    criticalEvents: int
+    highEvents: int
+    mediumEvents: int
+    lowEvents: int
+    byCompetitor: list[CompetitorStats]
+    byEventType: list[EventTypeStats]
+
+
+class MonitoringJobOut(BaseModel):
+    id: str
+    jobType: str
+    status: str
+    progress: int = 0
+    currentStep: str = ""
+    documentsFound: int
+    documentsProcessed: int
+    startedAt: Optional[str] = None
+    completedAt: Optional[str] = None
+    error: Optional[str] = None
+
+class CheckNowResponse(BaseModel):
+    message: str
+    jobId: str
+    status: str
+
+class CheckStatusResponse(BaseModel):
+    jobId: Optional[str]
+    status: str
+    progress: int
+    currentStep: str
+    documentsFound: int
+    documentsProcessed: int
+    startedAt: Optional[str] = None
+    completedAt: Optional[str] = None
+    error: Optional[str] = None
+
+
+class MonitoringJobsResponse(BaseModel):
+    jobs: list[MonitoringJobOut]
+
+
+# --- Task Models ---
+
+class TaskOut(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    recommendedSteps: Optional[str] = None
+    priority: str
+    status: str
+    category: Optional[str] = None
+    sourceType: str
+    competitorId: Optional[str] = None
+    competitorName: Optional[str] = None
+    eventType: Optional[str] = None
+    impactScore: Optional[int] = None
+    jiraIssueUrl: Optional[str] = None
+    dueDate: Optional[str] = None
+    completedAt: Optional[str] = None
+    dismissedAt: Optional[str] = None
+    dismissedReason: Optional[str] = None
+    createdAt: Optional[str] = None
+    updatedAt: Optional[str] = None
+
+class TasksResponse(BaseModel):
+    tasks: list[TaskOut]
+    total: int
+    todo: int
+    inProgress: int
+    done: int
+    dismissed: int
+    critical: int
+    high: int
+    medium: int
+    low: int
+
+class TaskCreatePayload(BaseModel):
+    title: str = Field(..., min_length=2, max_length=80)
+    description: Optional[str] = None
+    recommendedSteps: Optional[str] = None
+    priority: str = Field("HIGH")
+    category: str = Field("CUSTOM")
+    competitorId: Optional[str] = None
+    dueDate: Optional[str] = None
+
+class TaskUpdatePayload(BaseModel):
+    title: Optional[str] = Field(None, min_length=2, max_length=80)
+    description: Optional[str] = None
+    recommendedSteps: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    category: Optional[str] = None
+    dueDate: Optional[str] = None
+    jiraIssueUrl: Optional[str] = None
+
+class TaskStatusUpdatePayload(BaseModel):
+    status: str = Field(...)
+    dismissedReason: Optional[str] = None
+
+class TaskStatsResponse(BaseModel):
+    totalActive: int
+    critical: int
+    high: int
+    overdue: int
+    completedThisWeek: int
+    generatedThisWeek: int
+
+class TaskDetailResponse(BaseModel):
+    task: TaskOut
+    sourceDocument: Optional[dict[str, Any]] = None
+    sourceTrend: Optional[dict[str, Any]] = None
+    sourceAnomaly: Optional[dict[str, Any]] = None
+
+class JiraLinkResponse(BaseModel):
+    jiraUrl: str
+    domain: str
+    taskTitle: str

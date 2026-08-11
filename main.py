@@ -11,7 +11,8 @@ report formatting → file save → JSON response.
 
 import logging
 import re
-from datetime import datetime
+from urllib.parse import urlparse, urlencode
+from datetime import datetime, timezone
 from pathlib import Path
 
 from typing import Optional
@@ -51,6 +52,14 @@ from models import (
     CompanySettingsUpdatePayload,
     AuditLogResponse,
     CompetitorEditPayload,
+    TaskOut,
+    TasksResponse,
+    TaskCreatePayload,
+    TaskUpdatePayload,
+    TaskStatusUpdatePayload,
+    TaskStatsResponse,
+    TaskDetailResponse,
+    JiraLinkResponse,
 )
 from scraper import scrape_website, scrape_social
 from extractor import extract_signals
@@ -78,6 +87,12 @@ from database import (
     delete_competitor_permanently,
     update_competitor_research_status,
     get_audit_logs,
+    get_tasks,
+    create_task,
+    update_task,
+    delete_task,
+    get_task_by_id,
+    get_task_stats,
 )
 from auth import get_current_user
 from discovery_service import run_competitor_discovery
@@ -402,6 +417,7 @@ async def get_settings(user_id: str = Depends(get_current_user)) -> CompanySetti
         lastDiscoveryAt=company.get("last_discovery_at"),
         activeCompetitors=active,
         archivedCompetitors=archived,
+        jiraDomain=company.get("jira_domain"),
     )
 
 
@@ -423,6 +439,24 @@ async def update_settings(
     if "criticalAlertsEnabled" in update_data: db_payload["critical_alerts_enabled"] = update_data["criticalAlertsEnabled"]
     if "maxCompetitorsMonitored" in update_data: db_payload["max_competitors_monitored"] = update_data["maxCompetitorsMonitored"]
     
+    if "jiraDomain" in update_data:
+        domain_input = update_data["jiraDomain"]
+        if domain_input:
+            if domain_input.startswith("http"):
+                parsed = urlparse(domain_input)
+                host = parsed.netloc or parsed.path
+            else:
+                host = domain_input
+            
+            host = host.split(".atlassian.net")[0].split(".")[0]
+            
+            if not re.match(r"^[a-zA-Z0-9-]+$", host):
+                raise HTTPException(status_code=400, detail="Invalid Jira domain. Only alphanumeric characters and hyphens are allowed.")
+            
+            db_payload["jira_domain"] = host
+        else:
+            db_payload["jira_domain"] = None
+
     if db_payload:
         updated = update_company_settings(company_id, db_payload)
         if not updated:
@@ -1156,6 +1190,424 @@ async def get_manual_check_status(
         startedAt=j.get("started_at"),
         completedAt=j.get("completed_at"),
         error=j.get("error")
+    )
+
+
+# ---------------------------------------------------------------------------
+# Task Management (Action Center) Routes
+# ---------------------------------------------------------------------------
+
+@app.get("/api/tasks", response_model=TasksResponse)
+async def list_tasks(
+    status: Optional[str] = Query("active"),
+    priority: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    competitorId: Optional[str] = Query(None),
+    sourceType: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user_id: str = Depends(get_current_user)
+) -> TasksResponse:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    
+    company_id = str(company.get("id", ""))
+    
+    tasks, stats = get_tasks(
+        company_id=company_id,
+        status=status,
+        priority=priority,
+        category=category,
+        competitor_id=competitorId,
+        source_type=sourceType,
+        limit=limit,
+        offset=offset
+    )
+    
+    task_outs = []
+    for t in tasks:
+        task_outs.append(
+            TaskOut(
+                id=str(t.get("id")),
+                title=t.get("title"),
+                description=t.get("description"),
+                recommendedSteps=t.get("recommended_steps"),
+                priority=t.get("priority"),
+                status=t.get("status"),
+                category=t.get("category"),
+                sourceType=t.get("source_type"),
+                competitorId=str(t.get("competitor_id")) if t.get("competitor_id") else None,
+                competitorName=t.get("competitor_name"),
+                eventType=t.get("event_type"),
+                impactScore=t.get("impact_score"),
+                jiraIssueUrl=t.get("jira_issue_url"),
+                dueDate=t.get("due_date"),
+                completedAt=t.get("completed_at"),
+                dismissedAt=t.get("dismissed_at"),
+                dismissedReason=t.get("dismissed_reason"),
+                createdAt=t.get("created_at"),
+                updatedAt=t.get("updated_at")
+            )
+        )
+        
+    return TasksResponse(
+        tasks=task_outs,
+        total=stats.get("total", 0),
+        todo=stats.get("todo", 0),
+        inProgress=stats.get("inProgress", 0),
+        done=stats.get("done", 0),
+        dismissed=stats.get("dismissed", 0),
+        critical=stats.get("critical", 0),
+        high=stats.get("high", 0),
+        medium=stats.get("medium", 0),
+        low=stats.get("low", 0)
+    )
+
+@app.post("/api/tasks", response_model=TaskOut)
+async def create_manual_task(
+    payload: TaskCreatePayload,
+    user_id: str = Depends(get_current_user)
+) -> TaskOut:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    
+    company_id = str(company.get("id", ""))
+    
+    comp_name = None
+    if payload.competitorId:
+        comp = get_competitor_by_id(payload.competitorId)
+        if comp and str(comp.get("company_id")) == company_id:
+            comp_name = comp.get("name")
+        else:
+            payload.competitorId = None
+            
+    db_payload = {
+        "company_id": company_id,
+        "title": payload.title,
+        "description": payload.description,
+        "recommended_steps": payload.recommendedSteps,
+        "priority": payload.priority,
+        "status": "TODO",
+        "category": payload.category,
+        "source_type": "MANUAL",
+        "competitor_id": payload.competitorId,
+        "competitor_name": comp_name,
+        "due_date": payload.dueDate
+    }
+    
+    new_task = create_task(db_payload)
+    if not new_task:
+        raise HTTPException(status_code=500, detail="Failed to create task.")
+        
+    return TaskOut(
+        id=str(new_task.get("id")),
+        title=new_task.get("title"),
+        description=new_task.get("description"),
+        recommendedSteps=new_task.get("recommended_steps"),
+        priority=new_task.get("priority"),
+        status=new_task.get("status"),
+        category=new_task.get("category"),
+        sourceType=new_task.get("source_type"),
+        competitorId=str(new_task.get("competitor_id")) if new_task.get("competitor_id") else None,
+        competitorName=new_task.get("competitor_name"),
+        eventType=new_task.get("event_type"),
+        impactScore=new_task.get("impact_score"),
+        jiraIssueUrl=new_task.get("jira_issue_url"),
+        dueDate=new_task.get("due_date"),
+        completedAt=new_task.get("completed_at"),
+        dismissedAt=new_task.get("dismissed_at"),
+        dismissedReason=new_task.get("dismissed_reason"),
+        createdAt=new_task.get("created_at"),
+        updatedAt=new_task.get("updated_at")
+    )
+
+
+@app.put("/api/tasks/{task_id}", response_model=TaskOut)
+async def update_task_endpoint(
+    task_id: str,
+    payload: TaskUpdatePayload,
+    user_id: str = Depends(get_current_user)
+) -> TaskOut:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    company_id = str(company.get("id", ""))
+    
+    existing = get_task_by_id(task_id, company_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found.")
+        
+    db_payload = {}
+    if payload.title is not None: db_payload["title"] = payload.title
+    if payload.description is not None: db_payload["description"] = payload.description
+    if payload.recommendedSteps is not None: db_payload["recommended_steps"] = payload.recommendedSteps
+    if payload.priority is not None: db_payload["priority"] = payload.priority
+    if payload.category is not None: db_payload["category"] = payload.category
+    if payload.dueDate is not None: db_payload["due_date"] = payload.dueDate
+    if payload.jiraIssueUrl is not None: db_payload["jira_issue_url"] = payload.jiraIssueUrl
+    
+    if payload.status is not None:
+        db_payload["status"] = payload.status
+        if payload.status == "DONE":
+            db_payload["completed_at"] = datetime.now(timezone.utc).isoformat()
+        elif payload.status == "DISMISSED":
+            db_payload["dismissed_at"] = datetime.now(timezone.utc).isoformat()
+        elif payload.status in ("TODO", "IN_PROGRESS"):
+            db_payload["completed_at"] = None
+            db_payload["dismissed_at"] = None
+
+    updated = update_task(task_id, company_id, db_payload)
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to update task.")
+        
+    return TaskOut(
+        id=str(updated.get("id")),
+        title=updated.get("title"),
+        description=updated.get("description"),
+        recommendedSteps=updated.get("recommended_steps"),
+        priority=updated.get("priority"),
+        status=updated.get("status"),
+        category=updated.get("category"),
+        sourceType=updated.get("source_type"),
+        competitorId=str(updated.get("competitor_id")) if updated.get("competitor_id") else None,
+        competitorName=updated.get("competitor_name"),
+        eventType=updated.get("event_type"),
+        impactScore=updated.get("impact_score"),
+        jiraIssueUrl=updated.get("jira_issue_url"),
+        dueDate=updated.get("due_date"),
+        completedAt=updated.get("completed_at"),
+        dismissedAt=updated.get("dismissed_at"),
+        dismissedReason=updated.get("dismissed_reason"),
+        createdAt=updated.get("created_at"),
+        updatedAt=updated.get("updated_at")
+    )
+
+
+@app.post("/api/tasks/{task_id}/status", response_model=TaskOut)
+async def update_task_status(
+    task_id: str,
+    payload: TaskStatusUpdatePayload,
+    user_id: str = Depends(get_current_user)
+) -> TaskOut:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    company_id = str(company.get("id", ""))
+    
+    existing = get_task_by_id(task_id, company_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found.")
+        
+    db_payload = {"status": payload.status}
+    
+    if payload.status == "DONE":
+        db_payload["completed_at"] = datetime.now(timezone.utc).isoformat()
+    elif payload.status == "DISMISSED":
+        db_payload["dismissed_at"] = datetime.now(timezone.utc).isoformat()
+        if payload.dismissedReason:
+            db_payload["dismissed_reason"] = payload.dismissedReason
+    elif payload.status in ("TODO", "IN_PROGRESS"):
+        db_payload["completed_at"] = None
+        db_payload["dismissed_at"] = None
+
+    updated = update_task(task_id, company_id, db_payload)
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to update task status.")
+        
+    return TaskOut(
+        id=str(updated.get("id")),
+        title=updated.get("title"),
+        description=updated.get("description"),
+        recommendedSteps=updated.get("recommended_steps"),
+        priority=updated.get("priority"),
+        status=updated.get("status"),
+        category=updated.get("category"),
+        sourceType=updated.get("source_type"),
+        competitorId=str(updated.get("competitor_id")) if updated.get("competitor_id") else None,
+        competitorName=updated.get("competitor_name"),
+        eventType=updated.get("event_type"),
+        impactScore=updated.get("impact_score"),
+        jiraIssueUrl=updated.get("jira_issue_url"),
+        dueDate=updated.get("due_date"),
+        completedAt=updated.get("completed_at"),
+        dismissedAt=updated.get("dismissed_at"),
+        dismissedReason=updated.get("dismissed_reason"),
+        createdAt=updated.get("created_at"),
+        updatedAt=updated.get("updated_at")
+    )
+
+
+@app.delete("/api/tasks/{task_id}")
+async def delete_task_endpoint(
+    task_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    company_id = str(company.get("id", ""))
+    
+    existing = get_task_by_id(task_id, company_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found.")
+        
+    if existing.get("source_type") == "AI_GENERATED":
+        raise HTTPException(
+            status_code=400, 
+            detail="AI generated tasks cannot be deleted. Use dismiss to hide them."
+        )
+        
+    success = delete_task(task_id, company_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to delete task.")
+        
+    return {"message": "Task deleted"}
+
+
+@app.get("/api/tasks/stats/summary", response_model=TaskStatsResponse)
+async def get_task_stats_endpoint(
+    user_id: str = Depends(get_current_user)
+) -> TaskStatsResponse:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    company_id = str(company.get("id", ""))
+    
+    stats = get_task_stats(company_id)
+    
+    return TaskStatsResponse(
+        totalActive=stats.get("totalActive", 0),
+        critical=stats.get("critical", 0),
+        high=stats.get("high", 0),
+        overdue=stats.get("overdue", 0),
+        completedThisWeek=stats.get("completedThisWeek", 0),
+        generatedThisWeek=stats.get("generatedThisWeek", 0)
+    )
+
+
+@app.get("/api/tasks/{task_id}", response_model=TaskDetailResponse)
+async def get_task_detail(
+    task_id: str,
+    user_id: str = Depends(get_current_user)
+) -> TaskDetailResponse:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    company_id = str(company.get("id", ""))
+    
+    task = get_task_by_id(task_id, company_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+        
+    task_out = TaskOut(
+        id=str(task.get("id")),
+        title=task.get("title"),
+        description=task.get("description"),
+        recommendedSteps=task.get("recommended_steps"),
+        priority=task.get("priority"),
+        status=task.get("status"),
+        category=task.get("category"),
+        sourceType=task.get("source_type"),
+        competitorId=str(task.get("competitor_id")) if task.get("competitor_id") else None,
+        competitorName=task.get("competitor_name"),
+        eventType=task.get("event_type"),
+        impactScore=task.get("impact_score"),
+        jiraIssueUrl=task.get("jira_issue_url"),
+        dueDate=task.get("due_date"),
+        completedAt=task.get("completed_at"),
+        dismissedAt=task.get("dismissed_at"),
+        dismissedReason=task.get("dismissed_reason"),
+        createdAt=task.get("created_at"),
+        updatedAt=task.get("updated_at")
+    )
+    
+    source_doc = None
+    if task.get("source_document_id"):
+        res = supabase_client.table("documents").select("title,summary,source_url,event_type,impact_label,competitor_name,published_date").eq("id", task.get("source_document_id")).limit(1).execute()
+        if res and res.data:
+            source_doc = res.data[0]
+            
+    source_trend = None
+    if task.get("source_trend_id"):
+        res = supabase_client.table("competitor_trends").select("trend_type,description,severity,change_percent,strategic_implication").eq("id", task.get("source_trend_id")).limit(1).execute()
+        if res and res.data:
+            source_trend = res.data[0]
+            
+    source_anomaly = None
+    if task.get("source_anomaly_id"):
+        res = supabase_client.table("anomalies").select("anomaly_type,description,severity,observed_value,expected_value").eq("id", task.get("source_anomaly_id")).limit(1).execute()
+        if res and res.data:
+            source_anomaly = res.data[0]
+
+    return TaskDetailResponse(
+        task=task_out,
+        sourceDocument=source_doc,
+        sourceTrend=source_trend,
+        sourceAnomaly=source_anomaly
+    )
+
+
+@app.get("/api/tasks/{task_id}/jira-link", response_model=JiraLinkResponse)
+async def generate_jira_link(
+    task_id: str,
+    user_id: str = Depends(get_current_user)
+) -> JiraLinkResponse:
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+    company_id = str(company.get("id", ""))
+    
+    jira_domain = company.get("jira_domain")
+    if not jira_domain:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Jira domain not configured",
+                "message": "Please add your Jira domain in Settings to use this feature"
+            }
+        )
+        
+    task = get_task_by_id(task_id, company_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+        
+    # Build Jira URL
+    base_url = f"https://{jira_domain}.atlassian.net/secure/CreateIssueDetails!init.jspa"
+    
+    description_text = f"--- Competitive Intelligence Context ---\n{task.get('description', '')}\n\nRecommended Steps:\n{task.get('recommended_steps', '')}\n\n--- Source Information ---\nCompetitor: {task.get('competitor_name', 'Unknown')}\n"
+    
+    if task.get("event_type"):
+        description_text += f"Event Type: {task.get('event_type')}\n"
+    if task.get("impact_score"):
+        description_text += f"Impact Score: {task.get('impact_score')}\n"
+        
+    description_text += f"Generated by: Competitive Intelligence Agent\n"
+    # Using a generic placeholder for dashboard URL as backend might not know frontend host
+    description_text += f"View in dashboard: /dashboard/tasks/{task_id}"
+
+    priority_map = {
+        "CRITICAL": "1",
+        "HIGH": "2",
+        "MEDIUM": "3",
+        "LOW": "4"
+    }
+    
+    params = {
+        "issuetype": "10001",
+        "summary": task.get("title", ""),
+        "description": description_text,
+        "priority": priority_map.get(task.get("priority", "MEDIUM"), "3")
+    }
+    
+    query_string = urlencode(params)
+    final_url = f"{base_url}?{query_string}"
+    
+    return JiraLinkResponse(
+        jiraUrl=final_url,
+        domain=jira_domain,
+        taskTitle=task.get("title", "")
     )
 
 

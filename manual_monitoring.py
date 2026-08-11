@@ -14,6 +14,7 @@ from database import (
 from document_processing_service import DocumentProcessingService
 from intelligence_summary_service import IntelligenceSummaryService
 from competitor_monitoring_service import _is_recently_scraped
+from task_generation_service import TaskGenerationService
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,14 @@ async def run_manual_monitoring_job(company_id: str, job_id: str):
                     )
                     if processed_doc:
                         documents_processed += 1
+                        
+                        # Trigger task generation asynchronously
+                        impact = processed_doc.get("impact_label")
+                        if impact in ("CRITICAL", "HIGH") and processed_doc.get("id"):
+                            asyncio.create_task(TaskGenerationService.generateTaskFromDocument(
+                                str(processed_doc["id"]), company_id
+                            ))
+                            
                         # Update status every time a doc is processed so progress is visible
                         update_status(40, "Scraping and processing documents")
             except Exception as e:
@@ -128,9 +137,16 @@ async def run_manual_monitoring_job(company_id: str, job_id: str):
         # STEP 4: Updating trends and anomalies
         update_status(65, "Updating trends and anomalies")
         # Services for trend and anomaly detection are not yet implemented.
-        # Placeholders for future:
-        # await TrendDetectionService.run(company_id)
-        # await AnomalyDetectionService.run(company_id)
+        # Placeholders for future task generation integration:
+        # new_trends = await TrendDetectionService.run(company_id)
+        # for trend in (new_trends or []):
+        #     if trend.get("severity") in ("CRITICAL", "HIGH") and trend.get("id"):
+        #         asyncio.create_task(TaskGenerationService.generateTaskFromTrend(trend["id"], company_id))
+        # 
+        # new_anomalies = await AnomalyDetectionService.run(company_id)
+        # for anomaly in (new_anomalies or []):
+        #     if anomaly.get("severity") in ("CRITICAL", "HIGH") and anomaly.get("id"):
+        #         asyncio.create_task(TaskGenerationService.generateTaskFromAnomaly(anomaly["id"], company_id))
         await asyncio.sleep(0.5)
 
         # STEP 5: Generating updated intelligence summary

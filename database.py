@@ -1068,3 +1068,181 @@ def get_completed_companies() -> list[Dict[str, Any]]:
         return []
 
 
+# ---------------------------------------------------------------------------
+# Task Management (Action Center) Helpers
+# ---------------------------------------------------------------------------
+
+def get_tasks(
+    company_id: str,
+    status: Optional[str] = "active",
+    priority: Optional[str] = None,
+    category: Optional[str] = None,
+    competitor_id: Optional[str] = None,
+    source_type: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0
+) -> tuple[list[Dict[str, Any]], Dict[str, int]]:
+    """Fetch tasks and return stats."""
+    if not supabase_client:
+        return [], {}
+
+    try:
+        query = supabase_client.table("tasks").select("*", count="exact").eq("company_id", company_id)
+
+        if status:
+            if status == "active":
+                query = query.in_("status", ["TODO", "IN_PROGRESS"])
+            else:
+                query = query.eq("status", status)
+
+        if priority:
+            query = query.eq("priority", priority)
+        if category:
+            query = query.eq("category", category)
+        if competitor_id:
+            query = query.eq("competitor_id", competitor_id)
+        if source_type:
+            query = query.eq("source_type", source_type)
+
+        query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
+        res = query.execute()
+        tasks = res.data if res and res.data else []
+        total = res.count if res and res.count is not None else len(tasks)
+
+        # Get counts for all active tasks to fulfill stats requirements
+        stats_query = supabase_client.table("tasks").select("status, priority").eq("company_id", company_id).execute()
+        all_tasks = stats_query.data if stats_query and stats_query.data else []
+
+        stats = {
+            "total": total,
+            "todo": sum(1 for t in all_tasks if t.get("status") == "TODO"),
+            "inProgress": sum(1 for t in all_tasks if t.get("status") == "IN_PROGRESS"),
+            "done": sum(1 for t in all_tasks if t.get("status") == "DONE"),
+            "dismissed": sum(1 for t in all_tasks if t.get("status") == "DISMISSED"),
+            "critical": sum(1 for t in all_tasks if t.get("priority") == "CRITICAL" and t.get("status") in ("TODO", "IN_PROGRESS")),
+            "high": sum(1 for t in all_tasks if t.get("priority") == "HIGH" and t.get("status") in ("TODO", "IN_PROGRESS")),
+            "medium": sum(1 for t in all_tasks if t.get("priority") == "MEDIUM" and t.get("status") in ("TODO", "IN_PROGRESS")),
+            "low": sum(1 for t in all_tasks if t.get("priority") == "LOW" and t.get("status") in ("TODO", "IN_PROGRESS"))
+        }
+
+        return tasks, stats
+    except Exception as exc:
+        logger.exception("Failed to get tasks for company %s: %s", company_id, str(exc))
+        return [], {}
+
+
+def create_task(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not supabase_client:
+        return None
+    try:
+        res = supabase_client.table("tasks").insert(payload).execute()
+        return res.data[0] if res and res.data else None
+    except Exception as exc:
+        logger.exception("Failed to create task: %s", str(exc))
+        return None
+
+
+def update_task(task_id: str, company_id: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not supabase_client or not payload:
+        return None
+    try:
+        payload["updated_at"] = datetime.utcnow().isoformat()
+        res = supabase_client.table("tasks").update(payload).eq("id", task_id).eq("company_id", company_id).execute()
+        return res.data[0] if res and res.data else None
+    except Exception as exc:
+        logger.exception("Failed to update task %s: %s", task_id, str(exc))
+        return None
+
+
+def delete_task(task_id: str, company_id: str) -> bool:
+    if not supabase_client:
+        return False
+    try:
+        supabase_client.table("tasks").delete().eq("id", task_id).eq("company_id", company_id).execute()
+        return True
+    except Exception as exc:
+        logger.exception("Failed to delete task %s: %s", task_id, str(exc))
+        return False
+
+
+def get_task_by_id(task_id: str, company_id: str) -> Optional[Dict[str, Any]]:
+    if not supabase_client:
+        return None
+    try:
+        res = supabase_client.table("tasks").select("*").eq("id", task_id).eq("company_id", company_id).execute()
+        return res.data[0] if res and res.data else None
+    except Exception as exc:
+        logger.exception("Failed to fetch task %s: %s", task_id, str(exc))
+        return None
+
+
+def get_task_stats(company_id: str) -> Dict[str, Any]:
+    if not supabase_client:
+        return {}
+    try:
+        now = datetime.utcnow()
+        week_ago = (now - timedelta(days=7)).isoformat()
+        
+        # We need to fetch all tasks to calculate overdue properly because date comparisons in supabase can be tricky
+        res = supabase_client.table("tasks").select("*").eq("company_id", company_id).execute()
+        tasks = res.data if res and res.data else []
+
+        total_active = 0
+        critical = 0
+        high = 0
+        overdue = 0
+        completed_this_week = 0
+        generated_this_week = 0
+
+        for t in tasks:
+            status = t.get("status")
+            priority = t.get("priority")
+            source_type = t.get("source_type")
+            due_date_str = t.get("due_date")
+            completed_at_str = t.get("completed_at")
+            created_at_str = t.get("created_at")
+
+            if status in ("TODO", "IN_PROGRESS"):
+                total_active += 1
+                if priority == "CRITICAL":
+                    critical += 1
+                elif priority == "HIGH":
+                    high += 1
+                
+                if due_date_str:
+                    due_date = datetime.fromisoformat(due_date_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                    if due_date < now:
+                        overdue += 1
+
+            if status == "DONE" and completed_at_str:
+                if completed_at_str >= week_ago:
+                    completed_this_week += 1
+
+            if source_type == "AI_GENERATED" and created_at_str:
+                if created_at_str >= week_ago:
+                    generated_this_week += 1
+
+        return {
+            "totalActive": total_active,
+            "critical": critical,
+            "high": high,
+            "overdue": overdue,
+            "completedThisWeek": completed_this_week,
+            "generatedThisWeek": generated_this_week
+        }
+    except Exception as exc:
+        logger.exception("Failed to get task stats for %s: %s", company_id, str(exc))
+        return {}
+
+
+def check_task_exists_for_source(source_column: str, source_id: str) -> bool:
+    if not supabase_client:
+        return False
+    try:
+        res = supabase_client.table("tasks").select("id").eq(source_column, source_id).limit(1).execute()
+        return len(res.data) > 0 if res and res.data else False
+    except Exception as exc:
+        logger.exception("Failed to check task exists for %s %s: %s", source_column, source_id, str(exc))
+        return False
+
+
