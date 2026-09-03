@@ -133,35 +133,54 @@ class CompetitorDiscoveryService:
             # STEP 2 — Generate search queries using Groq, progress 15
             # -----------------------------------------------------------------
             logger.info("Step 2: Generating search queries via Groq...")
-            query_prompt = f"""You are a competitive intelligence analyst. Given the following company profile, generate exactly 5 search queries to find their direct competitors on the web. Focus on finding similar products, alternative tools, and competing solutions in the same space. Return only a valid JSON array of 5 strings, no explanation, no markdown, just the JSON array.
+            query_prompt = f"""You are a competitive intelligence analyst. Generate exactly 7 highly targeted search queries to find direct competitors for the company below.
 
+Rules:
+- Each query must be specific enough to return actual product homepages, NOT review sites or listicles
+- Mix query styles: product-category queries, use-case queries, named alternative queries, industry+feature combos
+- Include the actual product type in each query (e.g. "project management software" not just "alternatives")
+- DO NOT use generic phrases like "best tools" or "top solutions" alone — always combine with specific product category
+- Return only a valid JSON array of 7 strings, no explanation, no markdown
+
+COMPANY PROFILE:
 Company Name: {company_name}
 Industry: {industry}
 Description: {description}
 Products or Services: {products_str}
 Target Customers: {customer_segments}
-Problem Solved: {primary_problem}
-Business Type: {business_type}"""
+Primary Problem Solved: {primary_problem}
+Business Stage/Type: {business_type}
+Website: {website}
+
+Example output format (adapt to this company's actual product):
+["CRM software for small businesses", "sales automation tool B2B SaaS", "Salesforce alternative for startups", "HubSpot competitor CRM", "lead management software pricing", "customer relationship management SaaS startup", "sales pipeline tool free trial"]
+
+Generate 7 queries for the company above:"""
 
             queries = []
             try:
                 raw_queries = await _call_groq_json(query_prompt, model=EXTRACTION_MODEL)
                 if isinstance(raw_queries, list):
-                    queries = raw_queries
-                elif isinstance(raw_queries, dict) and "queries" in raw_queries:
-                    queries = raw_queries["queries"]
+                    queries = [str(q) for q in raw_queries if q and len(str(q)) > 5]
+                elif isinstance(raw_queries, dict):
+                    for key in ("queries", "results", "search_queries"):
+                        if key in raw_queries and isinstance(raw_queries[key], list):
+                            queries = [str(q) for q in raw_queries[key] if q]
+                            break
             except Exception as e:
-                logger.warning("Failed to parse Groq query array, using default search queries: %s", e)
-                queries = [
-                    f"{company_name} competitors alternative",
-                    f"best tools like {company_name} {industry}",
-                    f"top solutions for {industry} {products_str[:30]}",
-                    f"software similar to {company_name}",
-                    f"{industry} competitive alternatives",
-                ]
+                logger.warning("Failed to parse Groq query array, using fallback queries: %s", e)
 
             if not queries:
-                queries = [f"{company_name} competitors", f"{industry} alternatives"]
+                # Specific fallback queries using known company details
+                queries = [
+                    f"{products_str[:40]} software",
+                    f"{industry} {products_str[:30]} tool",
+                    f"{company_name} alternative",
+                    f"{products_str[:30]} platform for {customer_segments[:40]}",
+                    f"{industry} startup tool {business_type}",
+                    f"best {products_str[:30]} companies",
+                    f"{industry} SaaS {products_str[:25]} pricing",
+                ]
 
             logger.info("Generated %d search queries: %s", len(queries), queries)
             update_company_setup_status(
@@ -177,7 +196,15 @@ Business Type: {business_type}"""
             logger.info("Step 3: Searching for candidate competitors...")
             candidate_urls: list[str] = []
 
-            for q in queries[:5]:
+            # Review/comparison site domains that should be excluded from discovery
+            discovery_noise_domains = {
+                "g2.com", "capterra.com", "getapp.com", "alternativeto.net",
+                "softwareadvice.com", "sourceforge.net", "producthunt.com",
+                "slant.co", "trustradius.com", "getapp.com",
+            }
+
+            # Run all queries, deduplicate results by URL
+            for q in queries[:7]:
                 results = await search_service.search_competitors(q)
                 for res in results:
                     url = res.get("url", "").strip()
@@ -189,8 +216,13 @@ Business Type: {business_type}"""
                     if own_domain and own_domain in cand_domain:
                         continue
 
-                    # Filter blocked domains using SearchService helper
+                    # Filter blocked domains
                     if not search_service._is_allowed_url(url):
+                        continue
+
+                    # Filter review/comparison sites — they are not competitors
+                    if any(noise in cand_domain for noise in discovery_noise_domains):
+                        logger.debug("Skipping review/comparison site: %s", url)
                         continue
 
                     if url not in candidate_urls:
