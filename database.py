@@ -182,7 +182,7 @@ def get_company_profile_by_id(company_id: str) -> Optional[Dict[str, Any]]:
             return response.data[0]
         return None
     except Exception as exc:
-        logger.exception("Failed to fetch company profile by id %s: %s", company_id, str(exc))
+        logger.warning("Failed to fetch company profile by id %s: %s", company_id, str(exc))
         return None
 
 
@@ -436,7 +436,7 @@ def get_competitors_for_company(
         result = query.order("competitive_score", desc=True).execute()
         return result.data if result and result.data else []
     except Exception as exc:
-        logger.exception("Failed to get competitors for company %s: %s", company_id, str(exc))
+        logger.warning("Failed to get competitors for company %s: %s", company_id, str(exc))
         return []
 
 
@@ -464,7 +464,7 @@ def get_competitor_by_id(competitor_id: str) -> Optional[Dict[str, Any]]:
             return result.data[0]
         return None
     except Exception as exc:
-        logger.exception("Failed to get competitor %s: %s", competitor_id, str(exc))
+        logger.warning("Failed to get competitor %s: %s", competitor_id, str(exc))
         return None
 
 

@@ -105,6 +105,9 @@ from signal_analyzer import analyze_competitor_signal
 from snapshot_service import SnapshotService
 from pricing_matrix_service import PricingMatrixService
 from alert_service import AlertService
+from positioning_engine import PositioningEngine
+from win_loss_service import WinLossService
+from models import DealOutcomePayload
 
 
 # ---------------------------------------------------------------------------
@@ -795,6 +798,54 @@ async def get_competitor_deltas_endpoint(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found.")
     return SnapshotService.compute_step_function_deltas(competitor_id)
+
+
+@app.get("/api/competitors/positioning-radar")
+async def get_positioning_radar_endpoint(
+    user_id: str = Depends(get_current_user)
+):
+    """Retrieve 2D spatial positioning coordinates, quadrant classifications, threat encroachment, and whitespace opportunities."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    company_id = str(company.get("id", ""))
+    return PositioningEngine.get_positioning_radar(company_id)
+
+
+@app.post("/api/deals/outcome")
+async def record_deal_outcome_endpoint(
+    payload: DealOutcomePayload,
+    user_id: str = Depends(get_current_user)
+):
+    """Record a sales cycle deal outcome (WON, LOST, TIED) against a specific competitor."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    company_id = str(company.get("id", ""))
+    
+    record = WinLossService.record_deal_outcome(
+        company_id=company_id,
+        competitor_id=payload.competitorId,
+        outcome=payload.outcome,
+        deal_value=payload.dealValue or 0.0,
+        primary_reason=payload.primaryReason or "FEATURE_GAP",
+        competitor_strength=payload.competitorStrength,
+        prospect_name=payload.prospectName,
+        notes=payload.notes,
+    )
+    return {"status": "ok", "message": "Deal outcome recorded successfully.", "deal": record}
+
+
+@app.get("/api/deals/analytics")
+async def get_deal_analytics_endpoint(
+    user_id: str = Depends(get_current_user)
+):
+    """Get aggregated win rates, head-to-head records per competitor, root loss reasons, and revenue at risk."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    company_id = str(company.get("id", ""))
+    return WinLossService.get_deal_analytics(company_id)
 
 
 @app.post("/api/competitors/{competitor_id}/accept", response_model=CompetitorOut)

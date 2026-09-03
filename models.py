@@ -413,3 +413,17 @@ class JiraLinkResponse(BaseModel):
     jiraUrl: str
     domain: str
     taskTitle: str
+
+
+# ---------------------------------------------------------------------------
+# Win/Loss Deal Intelligence Models
+# ---------------------------------------------------------------------------
+
+class DealOutcomePayload(BaseModel):
+    competitorId: str = Field(..., description="UUID or identifier of the competitor")
+    outcome: str = Field(..., description="WON, LOST, or TIED")
+    dealValue: Optional[float] = Field(0.0, description="Estimated deal value in USD")
+    primaryReason: Optional[str] = Field("FEATURE_GAP", description="PRICING, FEATURE_GAP, BRAND_TRUST, USABILITY, SPEED")
+    competitorStrength: Optional[str] = None
+    prospectName: Optional[str] = None
+    notes: Optional[str] = None
