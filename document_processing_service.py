@@ -371,10 +371,29 @@ Relevance scoring:
                 event_type,
                 event_sub_type or "—",
                 impact_score,
-                impact_label,
                 threat_level,
                 recommended_action,
             )
+
+            # Trigger instant alert for CRITICAL events or structural market moves
+            if impact_score >= 80 or event_type in ("PRICING_CHANGE", "ACQUISITION"):
+                try:
+                    from alert_service import AlertService
+                    asyncio.create_task(
+                        AlertService.dispatch_critical_event_alert(
+                            competitor_name=competitor_name,
+                            event_type=event_type,
+                            impact_score=impact_score,
+                            impact_label=impact_label,
+                            title=title or f"{competitor_name} — {event_type.replace('_', ' ').title()}",
+                            summary=summary,
+                            source_url=url,
+                            recommended_action=recommended_action,
+                        )
+                    )
+                except Exception as alert_exc:
+                    logger.warning("Alert dispatch hook error: %s", alert_exc)
+
             return saved_doc
 
         logger.warning("Failed to save processed document to DB for URL: %s", url)

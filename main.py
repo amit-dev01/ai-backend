@@ -102,6 +102,9 @@ from manual_monitoring import run_manual_monitoring_job
 from battlecard_service import BattlecardService
 from nlp_portfolio_engine import extract_flagship_and_boundaries
 from signal_analyzer import analyze_competitor_signal
+from snapshot_service import SnapshotService
+from pricing_matrix_service import PricingMatrixService
+from alert_service import AlertService
 
 
 # ---------------------------------------------------------------------------
@@ -756,6 +759,42 @@ async def get_competitor_mathematical_signals(
         "signalProcessing": signals_result,
         "totalSignalsAnalyzed": len(recent_docs)
     }
+
+
+@app.get("/api/competitors/pricing-matrix")
+async def get_category_pricing_matrix_endpoint(
+    user_id: str = Depends(get_current_user)
+):
+    """Get the live category pricing matrix, pricing boundaries (minima/maxima), and whitespace gaps."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    company_id = str(company.get("id", ""))
+    return PricingMatrixService.get_category_pricing_matrix(company_id)
+
+
+@app.get("/api/competitors/{competitor_id}/snapshots")
+async def get_competitor_snapshots_endpoint(
+    competitor_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """Retrieve historical snapshots timeline for a competitor."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    return SnapshotService.get_snapshots_for_competitor(competitor_id)
+
+
+@app.get("/api/competitors/{competitor_id}/deltas")
+async def get_competitor_deltas_endpoint(
+    competitor_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """Compute mathematical step-function pricing shifts and flagship pivots across time."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    return SnapshotService.compute_step_function_deltas(competitor_id)
 
 
 @app.post("/api/competitors/{competitor_id}/accept", response_model=CompetitorOut)
