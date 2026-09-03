@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚡ AURA-CI // AUTONOMOUS COMPETITIVE INTELLIGENCE ENGINE
+#  AUTONOMOUS COMPETITIVE INTELLIGENCE ENGINE
 ### Multi-Signal Ingestion • Deterministic Signal Processing (Maxima/Minima) • NLP Salience • Spatial Positioning Radar • Autonomous GTM Weapons
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -20,7 +20,7 @@
 
 ---
 
-## 📑 System Index
+## System Index
 - [Why Traditional Scrapers Fail](#-why-traditional-scrapers-fail)
 - [Master System Architecture](#-master-system-architecture)
 - [Mathematical & Signal Processing Core](#-mathematical--signal-processing-core)
@@ -36,7 +36,7 @@
 
 ---
 
-## 💀 Why Traditional Scrapers Fail
+##  Why Traditional Scrapers Fail
 
 Most AI hackathon projects and toy scrapers operate as **single-shot, stateless LLM wrappers**:
 ```
@@ -50,7 +50,7 @@ Most AI hackathon projects and toy scrapers operate as **single-shot, stateless 
 
 ---
 
-## 🏛 Master System Architecture
+##  Master System Architecture
 
 ```mermaid
 flowchart TB
@@ -93,7 +93,7 @@ flowchart TB
 
 ---
 
-## 🔬 Mathematical & Signal Processing Core
+##  Mathematical & Signal Processing Core
 
 ### 1. Inflection Maxima & Minima Detection (`scipy.signal.find_peaks`)
 
@@ -248,7 +248,7 @@ All capabilities are exposed via REST API endpoints on `http://localhost:8000`:
 
 ---
 
-## 🚨 Autonomous Alerting & GTM Dispatch Loop
+##  Autonomous Alerting & GTM Dispatch Loop
 
 The system operates as an **autonomous closed-loop agent**. When a competitor move is detected during scheduled sweeps:
 
@@ -275,7 +275,7 @@ sequenceDiagram
 
 ---
 
-## 🚀 Quickstart & Deployment
+##  Quickstart & Deployment
 
 ### 1. Clone & Setup Environment
 ```bash
@@ -309,7 +309,7 @@ http://localhost:8000/docs
 
 ---
 
-## 🔑 Production Environment Variables
+##  Production Environment Variables
 
 | Variable | Required | Description |
 | :--- | :---: | :--- |
