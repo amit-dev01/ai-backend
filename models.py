@@ -427,3 +427,12 @@ class DealOutcomePayload(BaseModel):
     competitorStrength: Optional[str] = None
     prospectName: Optional[str] = None
     notes: Optional[str] = None
+
+
+class SemanticSimilarityPayload(BaseModel):
+    source_text: str = Field(..., description="Reference text (e.g. company profile)")
+    candidate_texts: list[str] = Field(..., description="List of candidate texts to rank by semantic similarity")
+
+
+class BusinessSentimentPayload(BaseModel):
+    text: str = Field(..., description="Text to analyze for financial and corporate sentiment")

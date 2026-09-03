@@ -227,7 +227,7 @@ $$\Delta P_{\min} = P_{\min}(t) - P_{\min}(t-1) \quad \Big( \text{Percentage: } 
 
 ---
 
-## ⚔️ The 12 Enterprise Intelligence Weapons
+## ⚔️ The 16 Enterprise Intelligence Weapons
 
 All capabilities are exposed via REST API endpoints on `http://localhost:8000`:
 
@@ -245,6 +245,10 @@ All capabilities are exposed via REST API endpoints on `http://localhost:8000`:
 | **10**| `/api/reports/boardroom-pdf` | `GET` | `PDFReportService` | **Boardroom Vector PDF**: Downloadable multi-page briefing document for C-suite. |
 | **11**| `/api/competitors/share-of-voice` | `GET` | `ShareOfVoiceService` | **Market Presence (SOV%)**: Conversational footprint % and buzz velocity rankings. |
 | **12**| `/api/competitors/{id}/github-signals` | `GET` | `GitHubMonitoringService`| **Technical Velocity**: Open-source release cadence, stargazers, and language stack. |
+| **13**| `/api/competitors/{id}/ml-anomalies` | `GET` | `CompetitorAnomalyDetector`| **ML Anomaly Detection**: `IsolationForest` statistical outlier flags on competitor moves. |
+| **14**| `/api/intelligence/ml-clusters` | `GET` | `TopicClusteringEngine` | **ML Topic Clustering**: `KMeans` ($k=3..5$) unsupervised thematic clustering of market events. |
+| **15**| `/api/ml/semantic-similarity` | `POST`| `HuggingFaceService` | **Hugging Face Vectors**: `sentence-transformers/all-MiniLM-L6-v2` dense cosine similarity. |
+| **16**| `/api/ml/business-sentiment` | `POST`| `HuggingFaceService` | **Hugging Face FinBERT**: `ProsusAI/finbert` corporate & financial sentiment classification. |
 
 ---
 
