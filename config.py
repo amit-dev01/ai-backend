@@ -23,6 +23,7 @@ JINA_API_KEY: str = os.getenv("JINA_API_KEY", "")
 EXA_API_KEY: str = os.getenv("EXA_API_KEY", "")
 SERPER_API_KEY: str = os.getenv("SERPER_API_KEY", "")
 NEWS_API_KEY: str = os.getenv("NEWS_API_KEY", "")
+HUGGINGFACE_API_KEY: str = os.getenv("HUGGINGFACE_API_KEY", "")
 
 MONITORING_SCHEDULE_NEWS: str = os.getenv("MONITORING_SCHEDULE_NEWS", "0 8 * * *")
 MONITORING_SCHEDULE_PAGES: str = os.getenv("MONITORING_SCHEDULE_PAGES", "0 9 * * 1")

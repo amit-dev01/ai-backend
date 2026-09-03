@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Hugging Face Models
 HF_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 HF_SENTIMENT_MODEL = "ProsusAI/finbert"
-HF_API_BASE = "https://api-inference.huggingface.co/models"
+HF_API_BASE = "https://router.huggingface.co/hf-inference/models"
 
 
 class HuggingFaceService:
