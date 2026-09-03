@@ -99,6 +99,9 @@ from auth import get_current_user
 from discovery_service import run_competitor_discovery
 from competitor_monitoring_service import CompetitorMonitoringService
 from manual_monitoring import run_manual_monitoring_job
+from battlecard_service import BattlecardService
+from nlp_portfolio_engine import extract_flagship_and_boundaries
+from signal_analyzer import analyze_competitor_signal
 
 
 # ---------------------------------------------------------------------------
@@ -667,6 +670,92 @@ async def re_research_competitor(competitor_id: str, user_id: str = Depends(get_
     task.add_done_callback(_active_background_tasks.discard)
     
     return {"status": "ok", "message": "Research job started in background."}
+
+
+@app.get("/api/competitors/{competitor_id}/battlecard")
+async def get_competitor_battlecard(
+    competitor_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """Generate or retrieve a tactical 1-page sales battlecard against this competitor."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+
+    company_id = str(company.get("id", ""))
+    comp = get_competitor_by_id(competitor_id)
+    if not comp or str(comp.get("company_id")) != company_id:
+        raise HTTPException(status_code=404, detail="Competitor not found.")
+
+    battlecard = await BattlecardService.generate_battlecard(company_id, competitor_id)
+    return battlecard
+
+
+@app.get("/api/competitors/{competitor_id}/signals")
+async def get_competitor_mathematical_signals(
+    competitor_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """Retrieve mathematical signal processing analytics (maxima, minima, flagship, price boundaries)."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+
+    company_id = str(company.get("id", ""))
+    comp = get_competitor_by_id(competitor_id)
+    if not comp or str(comp.get("company_id")) != company_id:
+        raise HTTPException(status_code=404, detail="Competitor not found.")
+
+    # Fetch recent intelligence documents
+    recent_docs = []
+    if supabase_client:
+        try:
+            res = (
+                supabase_client.table("intelligence_documents")
+                .select("title, summary, event_type, impact_score, published_date, sentiment")
+                .eq("competitor_id", competitor_id)
+                .order("created_at", desc=True)
+                .limit(20)
+                .execute()
+            )
+            recent_docs = res.data or []
+        except Exception as exc:
+            logger.warning("Could not fetch docs for signals: %s", exc)
+
+    comp_name = comp.get("name", "Competitor")
+    comp_desc = comp.get("description", "")
+    comp_notes = comp.get("notes", "")
+
+    # 1. NLP Flagship & Pricing Boundary Analysis
+    text_corpus = f"{comp_desc}\n{comp_notes}\n" + "\n".join([d.get("summary", "") for d in recent_docs])
+    nlp_results = extract_flagship_and_boundaries(
+        content=text_corpus,
+        headers_text=comp_name,
+        competitor_name=comp_name
+    )
+
+    # 2. Mathematical Signal Processing (Maxima & Minima)
+    event_counts = [1] * max(len(recent_docs), 4)
+    dates = [d.get("published_date") or "Recent" for d in recent_docs[:len(event_counts)]]
+    sent_scores = []
+    for d in recent_docs[:len(event_counts)]:
+        s_val = (d.get("sentiment") or "NEUTRAL").upper()
+        sent_scores.append(1.0 if s_val == "POSITIVE" else (-1.0 if s_val == "NEGATIVE" else 0.0))
+
+    signals_result = analyze_competitor_signal(
+        event_counts=event_counts,
+        dates=dates,
+        sentiment_scores=sent_scores if sent_scores else None,
+        competitor_name=comp_name
+    )
+
+    return {
+        "competitorId": competitor_id,
+        "competitorName": comp_name,
+        "flagshipAnalysis": nlp_results,
+        "signalProcessing": signals_result,
+        "totalSignalsAnalyzed": len(recent_docs)
+    }
 
 
 @app.post("/api/competitors/{competitor_id}/accept", response_model=CompetitorOut)
