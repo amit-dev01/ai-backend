@@ -196,8 +196,8 @@ Business Type: {business_type}"""
                     if url not in candidate_urls:
                         candidate_urls.append(url)
 
-            # Keep maximum 15 candidate URLs
-            candidate_urls = candidate_urls[:15]
+            # Keep maximum 25 candidate URLs for broader discovery coverage
+            candidate_urls = candidate_urls[:25]
             logger.info("Found %d candidate URLs for discovery", len(candidate_urls))
 
             update_company_setup_status(
@@ -251,19 +251,23 @@ Extract this structure:
 {{
   "companyName": string or null,
   "website": "{url}",
-  "description": string of 2 to 3 sentences maximum,
-  "mainProduct": string,
-  "targetCustomers": array of strings,
+  "description": string of 2 to 3 sentences capturing their core value proposition and target customer,
+  "mainProduct": string describing their primary offering,
+  "targetCustomers": array of strings naming specific customer segments,
   "industry": string,
-  "businessModel": one of B2B or B2C or Both or Unknown,
+  "businessModel": one of B2B or B2C or Both or SaaS or Marketplace or Unknown,
+  "pricingModel": one of subscription or freemium or one-time or usage-based or quote-based or unknown,
+  "estimatedPriceRange": string e.g. $29-$299/month or null,
+  "keyDifferentiators": array of up to 3 specific claimed differentiators,
+  "fundingOrScaleSignals": string noting any mention of investors, team size, customer count or null,
   "isActualCompany": true or false
 }}
 
 Set isActualCompany to false if this is not a real company homepage.
 Set isActualCompany to false if this is a blog post, news article, comparison site, or directory listing.
 
-Website content:
-{scraped_text}"""
+Website content (first 8000 chars):
+{scraped_text[:8000]}"""
 
                 try:
                     profile = await _call_groq_json(extract_prompt, model=EXTRACTION_MODEL)
@@ -300,7 +304,7 @@ Website content:
                 cand_ind = cand.get("industry") or ""
                 cand_bm = cand.get("businessModel") or "Unknown"
 
-                score_prompt = f"""You are a competitive intelligence analyst. Compare these two companies and score their competitive overlap. Return only valid JSON, no explanation, no markdown.
+                score_prompt = f"""You are a competitive intelligence analyst. Compare these two companies and score their competitive overlap with precision. Return only valid JSON, no explanation, no markdown.
 
 OUR COMPANY:
 Name: {company_name}
@@ -318,6 +322,10 @@ Main Product: {cand_prod}
 Target Customers: {cand_cust_str}
 Industry: {cand_ind}
 Business Model: {cand_bm}
+Key Differentiators: {', '.join(cand.get('keyDifferentiators') or []) or 'Not specified'}
+Funding/Scale Signals: {cand.get('fundingOrScaleSignals') or 'None detected'}
+Pricing Model: {cand.get('pricingModel') or 'Unknown'}
+Price Range: {cand.get('estimatedPriceRange') or 'Unknown'}
 
 Return this JSON structure:
 {{
@@ -327,15 +335,18 @@ Return this JSON structure:
   "businessModelOverlap": integer 0 to 100,
   "overallScore": integer 0 to 100,
   "competitorType": one of DIRECT or INDIRECT or EMERGING,
-  "reason": string of 2 to 3 sentences explaining why they are a competitor,
-  "confidenceScore": integer 0 to 100
+  "reason": string of 2 to 3 sentences explaining specifically why they are a competitor and what makes them dangerous or beatable,
+  "confidenceScore": integer 0 to 100,
+  "uniqueDifferentiator": string describing what makes this competitor distinctly different from us in one sentence,
+  "switchingCostLevel": one of HIGH or MEDIUM or LOW describing how hard it would be for a customer to switch from them to us,
+  "marketPosition": one of LEADER or CHALLENGER or NICHE or EMERGING describing their market standing
 }}
 
 Scoring guide:
-DIRECT means same product and same target customer, score 70 to 100.
-INDIRECT means different product but solves same problem, score 40 to 70.
-EMERGING means small or new company that could compete in future, score 20 to 40.
-Score below 20 means not a real competitor."""
+DIRECT means same product and same target customer, overallScore 70 to 100.
+INDIRECT means different product but solves same problem, overallScore 40 to 70.
+EMERGING means small or new company that could compete in future, overallScore 20 to 40.
+Score below 20 means not a real competitor — do not include."""
 
                 try:
                     score_res = await _call_groq_json(score_prompt, model=EXTRACTION_MODEL)
@@ -380,6 +391,7 @@ Score below 20 means not a real competitor."""
                         "competitive_score": int(comp.get("overallScore", 50)),
                         "confidence_score": int(comp.get("confidenceScore", 80)),
                         "reason": comp.get("reason", "Discovered competitor in market segment."),
+                        "notes": f"Unique differentiator: {comp.get('uniqueDifferentiator', 'N/A')} | Switching cost: {comp.get('switchingCostLevel', 'N/A')} | Market position: {comp.get('marketPosition', 'N/A')}",
                     },
                 )
 

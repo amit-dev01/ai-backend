@@ -7,7 +7,7 @@ Orchestrates news monitoring and page change monitoring across all accepted comp
 import asyncio
 import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 import search_service
@@ -25,21 +25,6 @@ from document_processing_service import DocumentProcessingService
 logger = logging.getLogger(__name__)
 
 
-def _is_recently_scraped(url: str, days: int = 7) -> bool:
-    """Return True if the URL was scraped within the last N days."""
-    cached = get_url_cache(url)
-    if not cached:
-        return False
-    scraped_at_str = cached.get("scraped_at")
-    if not scraped_at_str:
-        return False
-    try:
-        scraped_at = datetime.fromisoformat(scraped_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
-        return (datetime.utcnow() - scraped_at).total_seconds() < (days * 86400)
-    except Exception:
-        return False
-
-
 class CompetitorMonitoringService:
     """Orchestrates scheduled news and website page monitoring jobs."""
 
@@ -54,25 +39,39 @@ class CompetitorMonitoringService:
         documents_found = 0
         documents_processed = 0
 
+        def _update(status: str, progress: int, step: str) -> None:
+            if job_id:
+                update_monitoring_job(
+                    job_id,
+                    status=status,
+                    documents_found=documents_found,
+                    documents_processed=documents_processed,
+                    progress=progress,
+                    current_step=step,
+                )
+
         try:
             company = get_company_profile_by_id(company_id)
             if not company or not company.get("monitoring_enabled", True):
                 logger.info("Monitoring disabled or company not found for %s. Finishing job.", company_id)
                 if job_id:
-                    update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0)
+                    update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0, progress=100, current_step="Monitoring disabled")
                 return job
 
             max_comps = company.get("max_competitors_monitored", 10)
             competitors = get_competitors_for_company(company_id, status="active", accepted="true")
             competitors = competitors[:max_comps]
-            
+
             if not competitors:
                 logger.info("No active accepted competitors found for company %s. Finishing job.", company_id)
                 if job_id:
-                    update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0)
+                    update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0, progress=100, current_step="No competitors to monitor")
                 return job
 
-            for competitor in competitors:
+            total_competitors = len(competitors)
+            _update("RUNNING", 10, f"Searching news for {total_competitors} competitor(s)...")
+
+            for comp_idx, competitor in enumerate(competitors):
                 comp_id = competitor.get("id")
                 comp_name = competitor.get("name", "").strip()
                 if not comp_name:
@@ -85,10 +84,14 @@ class CompetitorMonitoringService:
                 search2 = await search_service.searchCompetitorActivity(comp_name, "product launch")
                 search3 = await search_service.searchCompetitorActivity(comp_name, "funding")
 
-                all_search_items = search1 + search2 + search3
+                # Broader search coverage: news, product, funding, layoffs, acquisitions, partnerships
+                search4 = await search_service.searchCompetitorActivity(comp_name, "acquisition OR partnership")
+                search5 = await search_service.searchCompetitorActivity(comp_name, "layoffs OR expansion")
+
+                all_search_items = search1 + search2 + search3 + search4 + search5
                 documents_found += len(all_search_items)
 
-                # Deduplicate URLs
+                # Deduplicate URLs in-memory
                 seen_urls = set()
                 unique_items = []
                 for item in all_search_items:
@@ -97,12 +100,14 @@ class CompetitorMonitoringService:
                         seen_urls.add(url)
                         unique_items.append(item)
 
-                # Filter out URLs scraped within last 7 days
-                new_items = [item for item in unique_items if not _is_recently_scraped(item["url"], days=7)]
+                # Cap at 8 URLs per competitor — DocumentProcessingService handles
+                # 24h duplicate deduplication so no time-gate needed here
+                selected_items = unique_items[:8]
+                logger.info("Processing %d unique URLs for competitor '%s'", len(selected_items), comp_name)
 
-                # Cap maximum 5 new URLs per competitor per run
-                selected_items = new_items[:5]
-                logger.info("Found %d new URLs (capped at 5) for competitor '%s'", len(selected_items), comp_name)
+                # Progress: 10% base + up to 80% spread across competitors, then 10% for finalising
+                search_progress = 10 + int(((comp_idx + 0.5) / total_competitors) * 75)
+                _update("RUNNING", search_progress, f"Processing news for {comp_name} ({comp_idx + 1}/{total_competitors})...")
 
                 for idx, item in enumerate(selected_items):
                     url = item["url"]
@@ -110,7 +115,8 @@ class CompetitorMonitoringService:
                     published_date = item.get("publishedDate")
 
                     try:
-                        content = await scrape_website(url)
+                        # bypass_cache=True: always fetch fresh content during monitoring to detect changes
+                        content = await scrape_website(url, bypass_cache=True)
                         if content and len(content.strip()) > 50:
                             content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
                             upsert_url_cache(url, content_hash)
@@ -134,6 +140,10 @@ class CompetitorMonitoringService:
                     if idx < len(selected_items) - 1:
                         await asyncio.sleep(1.0)
 
+                # Update progress after each competitor's documents are processed
+                post_comp_progress = 10 + int(((comp_idx + 1) / total_competitors) * 75)
+                _update("RUNNING", post_comp_progress, f"Completed {comp_name} ({comp_idx + 1}/{total_competitors})")
+
             logger.info("=== News Monitoring Job Completed for Company %s (Found: %d, Processed: %d) ===",
                         company_id, documents_found, documents_processed)
 
@@ -143,6 +153,8 @@ class CompetitorMonitoringService:
                     status="COMPLETED",
                     documents_found=documents_found,
                     documents_processed=documents_processed,
+                    progress=100,
+                    current_step="Completed",
                 )
             return job
 
@@ -154,6 +166,8 @@ class CompetitorMonitoringService:
                     status="FAILED",
                     documents_found=documents_found,
                     documents_processed=documents_processed,
+                    progress=0,
+                    current_step="Failed",
                     error=str(exc),
                 )
             return None
@@ -169,25 +183,39 @@ class CompetitorMonitoringService:
         documents_found = 0
         documents_processed = 0
 
+        def _update(status: str, progress: int, step: str) -> None:
+            if job_id:
+                update_monitoring_job(
+                    job_id,
+                    status=status,
+                    documents_found=documents_found,
+                    documents_processed=documents_processed,
+                    progress=progress,
+                    current_step=step,
+                )
+
         try:
             company = get_company_profile_by_id(company_id)
             if not company or not company.get("monitoring_enabled", True):
                 logger.info("Monitoring disabled or company not found for %s. Finishing job.", company_id)
                 if job_id:
-                    update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0)
+                    update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0, progress=100, current_step="Monitoring disabled")
                 return job
 
             max_comps = company.get("max_competitors_monitored", 10)
             competitors = get_competitors_for_company(company_id, status="active", accepted="true")
             competitors = competitors[:max_comps]
-            
+
             if not competitors:
                 logger.info("No active accepted competitors found for company %s. Finishing job.", company_id)
                 if job_id:
-                    update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0)
+                    update_monitoring_job(job_id, status="COMPLETED", documents_found=0, documents_processed=0, progress=100, current_step="No competitors to monitor")
                 return job
 
-            for competitor in competitors:
+            total_competitors = len(competitors)
+            _update("RUNNING", 10, f"Checking pages for {total_competitors} competitor(s)...")
+
+            for comp_idx, competitor in enumerate(competitors):
                 comp_id = competitor.get("id")
                 comp_name = competitor.get("name", "").strip()
                 website = (competitor.get("website_url") or competitor.get("website") or "").strip()
@@ -204,13 +232,18 @@ class CompetitorMonitoringService:
 
                 documents_found += len(pages_to_monitor)
 
+                # Progress: 10% base + up to 80% spread across competitors
+                comp_progress = 10 + int((comp_idx / total_competitors) * 80)
+                _update("RUNNING", comp_progress, f"Checking pages for {comp_name} ({comp_idx + 1}/{total_competitors})...")
+
                 for idx, page_url in enumerate(pages_to_monitor):
                     if _is_recently_scraped(page_url, days=7):
                         logger.info("Page %s was recently scraped within 7 days. Skipping.", page_url)
                         continue
 
                     try:
-                        content = await scrape_website(page_url)
+                        # bypass_cache=True: always fetch fresh content to detect actual page changes
+                        content = await scrape_website(page_url, bypass_cache=True)
                         if content and len(content.strip()) > 50:
                             new_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
                             cached = get_url_cache(page_url)
@@ -240,6 +273,10 @@ class CompetitorMonitoringService:
                     # 1 second delay between Jina calls
                     await asyncio.sleep(1.0)
 
+                # Update progress after each competitor's pages are done
+                post_comp_progress = 10 + int(((comp_idx + 1) / total_competitors) * 80)
+                _update("RUNNING", post_comp_progress, f"Completed page check for {comp_name} ({comp_idx + 1}/{total_competitors})")
+
             logger.info("=== Page Monitoring Job Completed for Company %s (Found: %d, Processed: %d) ===",
                         company_id, documents_found, documents_processed)
 
@@ -249,6 +286,8 @@ class CompetitorMonitoringService:
                     status="COMPLETED",
                     documents_found=documents_found,
                     documents_processed=documents_processed,
+                    progress=100,
+                    current_step="Completed",
                 )
             return job
 
@@ -260,6 +299,8 @@ class CompetitorMonitoringService:
                     status="FAILED",
                     documents_found=documents_found,
                     documents_processed=documents_processed,
+                    progress=0,
+                    current_step="Failed",
                     error=str(exc),
                 )
             return None

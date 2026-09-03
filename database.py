@@ -413,19 +413,19 @@ def get_competitors_for_company(
 
     try:
         query = supabase_client.table("competitors").select("*").eq("company_id", company_id)
-        
+
         if status == "active":
             query = query.eq("is_active", True)
         elif status == "archived":
             query = query.eq("is_active", False)
-            
+
         if comp_type:
-            # Need to handle custom_type override in python or simple eq if we just check type
-            query = query.eq("type", comp_type)
-            
+            # Match against both 'type' and 'custom_type' columns because effectiveType = custom_type || type
+            query = query.or_(f"type.eq.{comp_type},custom_type.eq.{comp_type}")
+
         if source:
             query = query.eq("source", source)
-            
+
         if accepted == "true":
             query = query.eq("is_accepted", True)
         elif accepted == "false":
@@ -663,27 +663,43 @@ def get_document_by_url(url: str, within_hours: int = 24) -> Optional[Dict[str, 
         return None
 
 
+def _coalesce(*keys_and_data) -> Any:
+    """Return the first non-None value from a dict using a list of key aliases.
+
+    Unlike `or` chaining, this preserves falsy values like 0 and empty string.
+    Usage: _coalesce(data, "camelKey", "snake_key")
+    """
+    data = keys_and_data[0]
+    for key in keys_and_data[1:]:
+        val = data.get(key)
+        if val is not None:
+            return val
+    return None
+
+
 def save_document(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Save a processed document to the documents table."""
     if not supabase_client:
         return None
     now_str = datetime.utcnow().isoformat()
+    # Use _coalesce instead of `or` so that zero/falsy numeric values are preserved
     payload = {
-        "competitor_id": data.get("competitorId") or data.get("competitor_id"),
-        "company_id": data.get("companyId") or data.get("company_id"),
-        "source_url": data.get("sourceUrl") or data.get("source_url"),
+        "competitor_id": _coalesce(data, "competitor_id", "competitorId"),
+        "company_id": _coalesce(data, "company_id", "companyId"),
+        "source_url": _coalesce(data, "source_url", "sourceUrl"),
         "title": data.get("title"),
-        "published_date": data.get("publishedDate") or data.get("published_date"),
-        "raw_content": data.get("rawContent") or data.get("raw_content"),
+        "published_date": _coalesce(data, "published_date", "publishedDate"),
+        "raw_content": _coalesce(data, "raw_content", "rawContent"),
         "summary": data.get("summary"),
-        "event_type": data.get("eventType") or data.get("event_type"),
+        "event_type": _coalesce(data, "event_type", "eventType"),
         "sentiment": data.get("sentiment"),
-        "sentiment_confidence": data.get("sentimentConfidence") or data.get("sentiment_confidence"),
-        "relevance_score": data.get("relevanceScore") or data.get("relevance_score"),
-        "relevance_reason": data.get("relevanceReason") or data.get("relevance_reason"),
-        "impact_score": data.get("impactScore") or data.get("impact_score"),
-        "impact_label": data.get("impactLabel") or data.get("impact_label"),
-        "is_processed": data.get("isProcessed", True),
+        # Numeric fields: use _coalesce so 0 is stored correctly, not replaced by None
+        "sentiment_confidence": _coalesce(data, "sentiment_confidence", "sentimentConfidence"),
+        "relevance_score": _coalesce(data, "relevance_score", "relevanceScore"),
+        "relevance_reason": _coalesce(data, "relevance_reason", "relevanceReason"),
+        "impact_score": _coalesce(data, "impact_score", "impactScore"),
+        "impact_label": _coalesce(data, "impact_label", "impactLabel"),
+        "is_processed": data.get("is_processed", data.get("isProcessed", True)),
         "created_at": now_str,
         "updated_at": now_str,
     }
@@ -812,6 +828,45 @@ def update_monitoring_job(
     except Exception as exc:
         logger.exception("Failed to update monitoring job %s: %s", job_id, str(exc))
         return None
+
+
+def cleanup_stale_monitoring_jobs(company_id: str, stale_after_minutes: int = 30) -> int:
+    """Mark RUNNING monitoring jobs older than stale_after_minutes as FAILED.
+
+    This prevents stuck jobs (from crashes or server restarts) from permanently
+    blocking future /check-now requests via the 409 active-job guard.
+
+    Returns:
+        Number of stale jobs cleaned up.
+    """
+    if not supabase_client:
+        return 0
+    try:
+        cutoff = (datetime.utcnow() - timedelta(minutes=stale_after_minutes)).isoformat()
+        # Find stale RUNNING jobs for this company
+        stale = (
+            supabase_client.table("monitoring_jobs")
+            .select("id")
+            .eq("company_id", company_id)
+            .eq("status", "RUNNING")
+            .lt("started_at", cutoff)
+            .execute()
+        )
+        if not stale or not stale.data:
+            return 0
+        stale_ids = [r["id"] for r in stale.data]
+        now_str = datetime.utcnow().isoformat()
+        for job_id in stale_ids:
+            supabase_client.table("monitoring_jobs").update({
+                "status": "FAILED",
+                "error": f"Job timed out after {stale_after_minutes} minutes (server restart or crash).",
+                "completed_at": now_str,
+            }).eq("id", job_id).execute()
+        logger.warning("Cleaned up %d stale monitoring job(s) for company %s", len(stale_ids), company_id)
+        return len(stale_ids)
+    except Exception as exc:
+        logger.exception("Failed to cleanup stale monitoring jobs for %s: %s", company_id, str(exc))
+        return 0
 
 
 def get_active_monitoring_job(company_id: str) -> Optional[Dict[str, Any]]:
@@ -943,11 +998,15 @@ def get_intelligence_stats(company_id: str) -> Dict[str, Any]:
             "byEventType": []
         }
     try:
+        # Capped at 500 rows to prevent performance degradation as documents accumulate.
+        # Stats are sampled from the most recent 500 processed documents.
         res = (
             supabase_client.table("documents")
             .select("*, competitors(id, name)")
             .eq("company_id", company_id)
             .eq("is_processed", True)
+            .order("created_at", desc=True)
+            .limit(500)
             .execute()
         )
         docs = res.data if res and res.data else []

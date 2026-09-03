@@ -26,38 +26,42 @@ async def generate_strategy_brief(company_id: str) -> None:
             logger.error("Company not found.")
             return
 
-        # Fetch intelligence documents from the past 7 days (limit 50 to avoid massive context window)
-        docs = get_recent_intelligence_documents(company_id, days=7, limit=50)
+        # Fetch intelligence documents from the past 30 days (richer context for strategic briefs)
+        docs = get_recent_intelligence_documents(company_id, days=30, limit=50)
         
         if not docs:
             logger.info("No recent intelligence documents found for company %s. Skipping brief generation.", company_id)
             return
 
-        logger.info("Fetched %d recent documents for summarization.", len(docs))
+        logger.info("Fetched %d recent documents (last 30 days) for summarization.", len(docs))
 
-        # Format documents into a context block
+        # Format documents into a rich structured context block
         docs_context = ""
         for i, doc in enumerate(docs):
             docs_context += f"Document {i+1}:\n"
             docs_context += f"- Competitor: {doc.get('competitor_name', 'Unknown')}\n"
             docs_context += f"- Title: {doc.get('title', '')}\n"
-            docs_context += f"- Summary: {doc.get('summary', '')}\n"
             docs_context += f"- Event Type: {doc.get('event_type', '')}\n"
-            docs_context += f"- Impact Label: {doc.get('impact_label', '')}\n\n"
+            docs_context += f"- Summary: {doc.get('summary', '')}\n"
+            docs_context += f"- Impact: {doc.get('impact_score', 0)}/100 ({doc.get('impact_label', '')})\n"
+            docs_context += f"- Relevance: {doc.get('relevance_score', 0)}/100\n"
+            if doc.get('relevance_reason'):
+                docs_context += f"- Why it matters for us: {doc.get('relevance_reason')}\n"
+            docs_context += "\n"
 
-        prompt = f"""You are a world-class competitive intelligence analyst. You are writing an automated executive Strategy Brief for the company '{company.get('company_name', 'Our Company')}'.
+        prompt = f"""You are a world-class competitive intelligence analyst writing an automated executive Strategy Brief for '{company.get('company_name', 'Our Company')}' in the {company.get('industry', 'market')}.
         
-Below are the recent intelligence documents collected about their competitors over the last 7 days.
-Analyze this data and synthesize it into a strategic brief.
+Below are {len(docs)} intelligence events from the past 30 days. Produce a concise, highly actionable strategic brief.
+Reference specific competitor names and events — no generic advice.
 
-Return ONLY a valid JSON object with the following exact keys (no markdown formatting, no explanations):
-- "weekly_brief": A 2-3 sentence high-level summary of the most critical competitor movements this week.
-- "top_threats": A list of up to 3 objects. Each object must have: "threat" (string), "competitor" (string), "urgency" (string, HIGH/MEDIUM/LOW), "recommendedAction" (string).
-- "opportunities": A list of up to 3 objects. Each object must have: "opportunity" (string), "basis" (string), "recommendedAction" (string).
-- "watch_list": A list of up to 3 competitor names (strings) that are highly active right now.
-- "strategic_recommendations": A list of 3 highly actionable strategic recommendations based ONLY on the provided events.
+Return ONLY a valid JSON object (no markdown, no explanations) with these exact keys:
+- "weekly_brief": 4-5 sentence strategic narrative. Lead with the most critical development. Name competitors. End with the single most urgent action.
+- "top_threats": List of up to 3 objects, each with: "threat" (specific, name the competitor), "competitor" (name), "urgency" (HIGH/MEDIUM/LOW), "recommendedAction" (verb + deliverable).
+- "opportunities": List of up to 3 objects, each with: "opportunity" (specific gap), "basis" (event that makes this possible), "recommendedAction" (specific next step).
+- "watch_list": List of up to 4 competitor names most active in this period.
+- "strategic_recommendations": List of 3-4 objects, each with: "recommendation" (specific action), "priority" (P0 this week / P1 this month / P2 this quarter), "rationale" (one sentence tied to data), "owner" (Marketing/Product/Sales/Founders/Engineering).
 
-Recent Intelligence Data:
+Recent Intelligence Data (last 30 days):
 {docs_context}
 """
 

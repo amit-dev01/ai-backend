@@ -78,6 +78,7 @@ from database import (
     get_intelligence_stats,
     get_monitoring_jobs_history,
     get_active_monitoring_job,
+    cleanup_stale_monitoring_jobs,
     create_monitoring_job,
     supabase_client,
     update_company_profile_partial,
@@ -1044,18 +1045,15 @@ async def get_intelligence_alerts(user_id: str = Depends(get_current_user)):
 async def trigger_monitoring_endpoint(
     user_id: str = Depends(get_current_user)
 ) -> dict:
-    """Manually trigger a background news monitoring job for the user's company."""
+    """Manually trigger a background news monitoring job for the user's company.
+
+    Note: job creation is handled internally by CompetitorMonitoringService.
+    """
     company = get_company_profile(user_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company profile not found.")
 
     company_id = str(company.get("id", ""))
-    active_job = get_active_monitoring_job(company_id)
-    if active_job:
-        logger.info("Overriding existing active monitoring job for company %s", company_id)
-
-    job = create_monitoring_job(company_id=company_id, competitor_id=None, job_type="NEWS_MONITORING")
-    job_id = job.get("id") if job else f"job-{int(datetime.utcnow().timestamp())}"
 
     task = asyncio.create_task(CompetitorMonitoringService.runNewsMonitoring(company_id))
     _active_background_tasks.add(task)
@@ -1063,7 +1061,7 @@ async def trigger_monitoring_endpoint(
 
     return {
         "message": "Monitoring job started",
-        "jobId": str(job_id)
+        "status": "RUNNING"
     }
 
 
@@ -1135,20 +1133,25 @@ async def trigger_manual_check(
     company = get_company_profile(user_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company profile not found.")
-    
+
     company_id = str(company.get("id", ""))
-    
+
+    # Clean up any stale RUNNING jobs (crashed / server restart) before checking
+    cleaned = cleanup_stale_monitoring_jobs(company_id, stale_after_minutes=30)
+    if cleaned:
+        logger.info("Cleaned up %d stale job(s) before starting new check-now for company %s", cleaned, company_id)
+
     active_job = get_active_monitoring_job(company_id)
     if active_job:
         raise HTTPException(status_code=409, detail="A check is already in progress")
-        
+
     job = create_monitoring_job(company_id=company_id, competitor_id=None, job_type="MANUAL_CHECK")
     if not job:
         raise HTTPException(status_code=500, detail="Failed to create monitoring job")
-        
+
     job_id = str(job.get("id"))
     background_tasks.add_task(run_manual_monitoring_job, company_id, job_id)
-    
+
     return CheckNowResponse(
         message="Check started",
         jobId=job_id,
