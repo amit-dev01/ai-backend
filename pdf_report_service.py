@@ -1,0 +1,255 @@
+"""
+Executive Boardroom PDF Report Generation Service.
+
+Synthesizes:
+  - Executive summary and company profile
+  - 2D Positioning Radar & Category Whitespace
+  - Category Pricing Matrix & Boundary Benchmarks
+  - Tactical Sales Battlecards & Landmines
+  - Win/Loss Deal Analytics
+
+Generates a vector PDF document using ReportLab.
+"""
+
+import io
+import logging
+from datetime import datetime
+from typing import Any, Optional
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, KeepTogether
+)
+
+from database import get_company_profile_by_id
+from positioning_engine import PositioningEngine
+from pricing_matrix_service import PricingMatrixService
+from win_loss_service import WinLossService
+
+logger = logging.getLogger(__name__)
+
+
+class PDFReportService:
+    """Generates boardroom-ready competitive intelligence PDF documents."""
+
+    @staticmethod
+    def generate_boardroom_pdf(company_id: str) -> bytes:
+        """
+        Builds a comprehensive multi-page executive competitive intelligence PDF.
+        """
+        company = get_company_profile_by_id(company_id) or {}
+        company_name = company.get("company_name", "Our Company")
+        industry = company.get("industry", "Technology")
+
+        # 1. Gather live analytics across modules
+        radar_data = PositioningEngine.get_positioning_radar(company_id)
+        pricing_data = PricingMatrixService.get_category_pricing_matrix(company_id)
+        deal_data = WinLossService.get_deal_analytics(company_id)
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=40,
+            leftMargin=40,
+            topMargin=40,
+            bottomMargin=40
+        )
+
+        styles = getSampleStyleSheet()
+
+        # Custom Corporate Palette
+        c_primary = colors.HexColor("#0F172A")    # Deep Slate
+        c_accent = colors.HexColor("#2563EB")     # Corporate Blue
+        c_light = colors.HexColor("#F8FAFC")      # Slate Light
+        c_text = colors.HexColor("#334155")       # Charcoal
+
+        title_style = ParagraphStyle(
+            "DocTitle",
+            parent=styles["Title"],
+            fontName="Helvetica-Bold",
+            fontSize=22,
+            leading=26,
+            textColor=c_primary,
+            alignment=0,
+            spaceAfter=6
+        )
+
+        subtitle_style = ParagraphStyle(
+            "DocSubTitle",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=11,
+            leading=15,
+            textColor=c_accent,
+            spaceAfter=15
+        )
+
+        h1_style = ParagraphStyle(
+            "Heading1_Custom",
+            parent=styles["Heading1"],
+            fontName="Helvetica-Bold",
+            fontSize=14,
+            leading=18,
+            textColor=c_primary,
+            spaceBefore=14,
+            spaceAfter=8
+        )
+
+        body_style = ParagraphStyle(
+            "Body_Custom",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=9,
+            leading=13,
+            textColor=c_text,
+            spaceAfter=8
+        )
+
+        bold_label = ParagraphStyle(
+            "BoldLabel",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=9,
+            leading=13,
+            textColor=c_primary,
+        )
+
+        elements = []
+
+        # -------------------------------------------------------------
+        # Header / Title Block
+        # -------------------------------------------------------------
+        elements.append(Paragraph(f"Competitive Intelligence Executive Briefing", title_style))
+        elements.append(Paragraph(
+            f"Prepared for: <b>{company_name}</b> | Industry: <b>{industry}</b> | Generated: {datetime.utcnow().strftime('%B %d, %Y')}",
+            subtitle_style
+        ))
+        elements.append(HRFlowable(width="100%", thickness=1.5, color=c_accent, spaceAfter=14))
+
+        # -------------------------------------------------------------
+        # Section 1: Executive Overview & Positioning Radar
+        # -------------------------------------------------------------
+        elements.append(Paragraph("1. Strategic Positioning Radar & Quadrant Mapping", h1_style))
+        home_node = radar_data.get("homeTeam", {})
+        summary_txt = radar_data.get("strategicPositioningSummary", "")
+        elements.append(Paragraph(f"<b>Market Position Summary:</b> {summary_txt}", body_style))
+
+        # 2x2 Positioning Summary Table
+        radar_table_data = [
+            [
+                Paragraph("<b>Metric</b>", bold_label),
+                Paragraph("<b>Our Assessment</b>", bold_label),
+                Paragraph("<b>Strategic Meaning</b>", bold_label)
+            ],
+            [
+                Paragraph("Assigned Quadrant", body_style),
+                Paragraph(f"<b>{home_node.get('quadrant', 'N/A')}</b>", body_style),
+                Paragraph(f"Market Focus: {home_node.get('marketFocus')} | Scope: {home_node.get('productScope')}", body_style)
+            ],
+            [
+                Paragraph("Spatial Coordinates", body_style),
+                Paragraph(f"X: {home_node.get('x')} / Y: {home_node.get('y')}", body_style),
+                Paragraph("Normalized scale [0 = SMB / Point Tool to 100 = Enterprise Platform]", body_style)
+            ],
+        ]
+
+        t_radar = Table(radar_table_data, colWidths=[130, 160, 240])
+        t_radar.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), c_light),
+            ("TEXTCOLOR", (0, 0), (-1, 0), c_primary),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        elements.append(t_radar)
+        elements.append(Spacer(1, 14))
+
+        # -------------------------------------------------------------
+        # Section 2: Competitive Pricing Matrix & Benchmarks
+        # -------------------------------------------------------------
+        elements.append(Paragraph("2. Category Pricing Matrix & Boundary Benchmarks", h1_style))
+        benchmarks = pricing_data.get("categoryBenchmarks", {})
+        cat_floor = benchmarks.get("marketFloorMinima")
+        cat_ceiling = benchmarks.get("marketCeilingMaxima")
+        cat_med = benchmarks.get("categoryMedian")
+
+        bench_desc = f"<b>Category Benchmarks:</b> Market Entry Floor: <b>${cat_floor:.0f}/mo</b> | Category Median: <b>${cat_med:.0f}/mo</b> | Enterprise Ceiling: <b>${cat_ceiling:.0f}/mo</b>" if cat_floor else "Category benchmarks calculated across active competitors."
+        elements.append(Paragraph(bench_desc, body_style))
+
+        # Competitor Pricing Grid Table
+        comp_rows = pricing_data.get("competitorMatrix", [])
+        pricing_table_data = [
+            [
+                Paragraph("<b>Competitor</b>", bold_label),
+                Paragraph("<b>Flagship Product</b>", bold_label),
+                Paragraph("<b>Floor ($P_{min}$)</b>", bold_label),
+                Paragraph("<b>Ceiling ($P_{max}$)</b>", bold_label),
+                Paragraph("<b>Positioning Tier</b>", bold_label)
+            ]
+        ]
+
+        for r in comp_rows[:8]:
+            p_min_str = f"${r.get('priceMinima'):.0f}" if r.get('priceMinima') is not None else "Contact"
+            p_max_str = f"${r.get('priceMaxima'):.0f}" if r.get('priceMaxima') is not None else "Contact"
+            pricing_table_data.append([
+                Paragraph(r.get("name", ""), body_style),
+                Paragraph(r.get("flagshipProduct", "")[:28], body_style),
+                Paragraph(p_min_str, body_style),
+                Paragraph(p_max_str, body_style),
+                Paragraph(r.get("positioningTier", ""), body_style)
+            ])
+
+        if len(pricing_table_data) > 1:
+            t_price = Table(pricing_table_data, colWidths=[110, 150, 80, 80, 110])
+            t_price.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), c_light),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]))
+            elements.append(t_price)
+
+        rec_txt = pricing_data.get("strategicRecommendation", "")
+        if rec_txt:
+            elements.append(Spacer(1, 6))
+            elements.append(Paragraph(f"<b>Strategic Pricing Recommendation:</b> {rec_txt}", body_style))
+
+        elements.append(Spacer(1, 14))
+
+        # -------------------------------------------------------------
+        # Section 3: Win/Loss Commercial Deal Intelligence
+        # -------------------------------------------------------------
+        elements.append(Paragraph("3. Commercial Win/Loss Deal Intelligence", h1_style))
+        deals_logged = deal_data.get("totalDealsLogged", 0)
+        win_rate = deal_data.get("overallWinRate", 0.0)
+        pip_lost = deal_data.get("pipelineLost", 0.0)
+        deal_rec = deal_data.get("strategicRecommendation", "")
+
+        deal_summary_txt = f"Total Competitive Deals Analyzed: <b>{deals_logged}</b> | Win Rate: <b>{win_rate}%</b> | Revenue Lost to Competitors: <b>${pip_lost:,.0f}</b>"
+        elements.append(Paragraph(deal_summary_txt, body_style))
+        elements.append(Paragraph(f"<b>Root Cause Action Item:</b> {deal_rec}", body_style))
+
+        # -------------------------------------------------------------
+        # Section 4: White Space Opportunities
+        # -------------------------------------------------------------
+        ws_items = radar_data.get("whiteSpaceOpportunities", [])
+        if ws_items:
+            elements.append(Spacer(1, 6))
+            elements.append(Paragraph("4. Uncontested Market White Space", h1_style))
+            for idx, ws in enumerate(ws_items[:2], 1):
+                elements.append(Paragraph(
+                    f"<b>Opportunity {idx} ({ws.get('quadrant')}):</b> Clearance Distance: {ws.get('clearanceDistance')} pts. <i>{ws.get('strategicRationale')}</i>",
+                    body_style
+                ))
+
+        # Build Document
+        doc.build(elements)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+
+        logger.info("Generated boardroom PDF for %s (%d bytes)", company_name, len(pdf_bytes))
+        return pdf_bytes

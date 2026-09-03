@@ -17,7 +17,7 @@ from pathlib import Path
 
 from typing import Optional
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import sys
@@ -108,6 +108,8 @@ from alert_service import AlertService
 from positioning_engine import PositioningEngine
 from win_loss_service import WinLossService
 from models import DealOutcomePayload
+from community_signals_service import CommunitySignalsService
+from pdf_report_service import PDFReportService
 
 
 # ---------------------------------------------------------------------------
@@ -846,6 +848,47 @@ async def get_deal_analytics_endpoint(
         raise HTTPException(status_code=404, detail="Company not found.")
     company_id = str(company.get("id", ""))
     return WinLossService.get_deal_analytics(company_id)
+
+
+@app.get("/api/competitors/{competitor_id}/community-signals")
+async def get_competitor_community_signals_endpoint(
+    competitor_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """Fetch live Reddit and Hacker News community discussions, complaints, and praise for a competitor."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    
+    comp = get_competitor_by_id(competitor_id)
+    if not comp:
+        raise HTTPException(status_code=404, detail="Competitor not found.")
+    
+    comp_name = comp.get("name", "Competitor")
+    return await CommunitySignalsService.get_community_voice(comp_name)
+
+
+@app.get("/api/reports/boardroom-pdf")
+async def download_boardroom_pdf_endpoint(
+    user_id: str = Depends(get_current_user)
+):
+    """Generate and stream a multi-page executive boardroom PDF report."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    
+    company_id = str(company.get("id", ""))
+    company_name = str(company.get("company_name", "Company")).replace(" ", "_")
+    
+    pdf_bytes = PDFReportService.generate_boardroom_pdf(company_id)
+    
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=competitive_intelligence_{company_name}.pdf"
+        }
+    )
 
 
 @app.post("/api/competitors/{competitor_id}/accept", response_model=CompetitorOut)
