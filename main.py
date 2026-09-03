@@ -989,6 +989,7 @@ async def get_intelligence_summary_endpoint(
         opportunities=company.get("opportunities") or [],
         watchList=company.get("watch_list") or [],
         strategicRecommendations=company.get("strategic_recommendations") or [],
+        competitiveVelocity=company.get("competitive_velocity") or [],
         generatedAt=company.get("weekly_brief_generated_at"),
     )
 

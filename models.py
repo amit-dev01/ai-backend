@@ -1,8 +1,7 @@
 """
 Pydantic models for Competitor Analysis AI.
 
-Defines the request schema (CompetitorRequest), intermediate data structures
-(DataPoint), and the full response schema (CompetitorReport).
+Defines request schemas, intermediate data structures, and all response schemas.
 """
 
 from datetime import datetime
@@ -10,6 +9,10 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, HttpUrl, Field
 
+
+# ---------------------------------------------------------------------------
+# Core Analysis Models
+# ---------------------------------------------------------------------------
 
 class CompetitorRequest(BaseModel):
     """Incoming request payload for competitor analysis."""
@@ -42,7 +45,7 @@ class DataPoint(BaseModel):
 
 
 class CompetitorReport(BaseModel):
-    """Full competitor intelligence report returned by the API."""
+    """Full competitor intelligence report returned by the /analyze API."""
 
     company_name: str
     executive_summary: str
@@ -58,12 +61,15 @@ class CompetitorReport(BaseModel):
     generated_at: datetime
 
 
-# --- Onboarding Models ---
+# ---------------------------------------------------------------------------
+# Onboarding Models
+# ---------------------------------------------------------------------------
 
 class CompetitorManual(BaseModel):
     """A manual competitor entry provided by the user."""
     name: str
     website: Optional[str] = None
+
 
 class CompanyProfilePayload(BaseModel):
     """Payload for submitting or updating a company profile."""
@@ -73,11 +79,11 @@ class CompanyProfilePayload(BaseModel):
     description: str = Field(..., description="Description of the company")
     productsOrServices: list[str] = Field(..., description="List of products or services")
     targetCustomers: str = Field(..., description="Information about target customers or market")
-    
     companyStage: Optional[str] = Field(None, description="Current stage of the company")
     companySize: Optional[str] = Field(None, description="Size of the company")
     competitors: Optional[list[CompetitorManual]] = Field(None, description="List of known competitors")
     excludedCompetitors: Optional[list[str]] = Field(None, description="Competitors to exclude from analysis")
+
 
 class CompanyProfileUpdatePayload(BaseModel):
     """Payload for updating an existing company profile."""
@@ -93,6 +99,7 @@ class CompanyProfileUpdatePayload(BaseModel):
     productsOrServices: Optional[str] = None
     primaryProblemSolved: Optional[str] = None
 
+
 class CompanySettingsOut(BaseModel):
     monitoringEnabled: bool
     emailDigestEnabled: bool
@@ -104,12 +111,14 @@ class CompanySettingsOut(BaseModel):
     archivedCompetitors: int
     jiraDomain: Optional[str] = None
 
+
 class CompanySettingsUpdatePayload(BaseModel):
     monitoringEnabled: Optional[bool] = None
     emailDigestEnabled: Optional[bool] = None
     criticalAlertsEnabled: Optional[bool] = None
     maxCompetitorsMonitored: Optional[int] = Field(None, ge=1, le=25)
     jiraDomain: Optional[str] = Field(None, description="Just the subdomain part without .atlassian.net")
+
 
 class AuditLogOut(BaseModel):
     id: str
@@ -119,9 +128,11 @@ class AuditLogOut(BaseModel):
     metadata: dict[str, Any] = {}
     createdAt: str
 
+
 class AuditLogResponse(BaseModel):
     activities: list[AuditLogOut]
     total: int
+
 
 class CompanyProfileResponseCompany(BaseModel):
     id: str
@@ -133,17 +144,21 @@ class CompanyProfileResponseCompany(BaseModel):
     mainThreats: Optional[list[str]] = None
     keyOpportunity: Optional[str] = None
 
+
 class CompanyProfileResponse(BaseModel):
     """Response showing if setup is complete, and basic company details if so."""
     setupCompleted: bool
     company: Optional[CompanyProfileResponseCompany] = None
 
 
-# --- Auth Models ---
+# ---------------------------------------------------------------------------
+# Auth Models
+# ---------------------------------------------------------------------------
 
 class AuthRequest(BaseModel):
     email: str = Field(..., description="User's email address")
     password: str = Field(..., description="User's password")
+
 
 class AuthResponse(BaseModel):
     access_token: str
@@ -152,7 +167,9 @@ class AuthResponse(BaseModel):
     email: str
 
 
-# --- Discovery Pipeline Models ---
+# ---------------------------------------------------------------------------
+# Discovery Pipeline Models
+# ---------------------------------------------------------------------------
 
 class SetupStatusResponse(BaseModel):
     """Response for GET /api/company/setup-status."""
@@ -205,6 +222,7 @@ class ManualCompetitorRequest(BaseModel):
     name: str = Field(..., description="Name of the competitor")
     website: str = Field(..., description="Website URL of the competitor")
 
+
 class CompetitorEditPayload(BaseModel):
     """Body for PUT /api/competitors/{id}"""
     name: Optional[str] = Field(None, min_length=2, max_length=100)
@@ -213,7 +231,9 @@ class CompetitorEditPayload(BaseModel):
     customType: Optional[str] = None
 
 
-# --- Intelligence Monitoring Models ---
+# ---------------------------------------------------------------------------
+# Intelligence Monitoring Models
+# ---------------------------------------------------------------------------
 
 class IntelligenceDocumentOut(BaseModel):
     id: str
@@ -244,7 +264,8 @@ class IntelligenceSummaryResponse(BaseModel):
     topThreats: list[dict[str, Any]] = []
     opportunities: list[dict[str, Any]] = []
     watchList: list[str] = []
-    strategicRecommendations: list[str] = []
+    strategicRecommendations: list[Any] = []  # list[dict] with priority/rationale/owner
+    competitiveVelocity: list[Any] = []       # list[dict] with competitor/eventCount/trend
     generatedAt: Optional[str] = None
 
 
@@ -284,10 +305,12 @@ class MonitoringJobOut(BaseModel):
     completedAt: Optional[str] = None
     error: Optional[str] = None
 
+
 class CheckNowResponse(BaseModel):
     message: str
     jobId: str
     status: str
+
 
 class CheckStatusResponse(BaseModel):
     jobId: Optional[str]
@@ -305,7 +328,9 @@ class MonitoringJobsResponse(BaseModel):
     jobs: list[MonitoringJobOut]
 
 
-# --- Task Models ---
+# ---------------------------------------------------------------------------
+# Task Models
+# ---------------------------------------------------------------------------
 
 class TaskOut(BaseModel):
     id: str
@@ -328,200 +353,6 @@ class TaskOut(BaseModel):
     createdAt: Optional[str] = None
     updatedAt: Optional[str] = None
 
-class TasksResponse(BaseModel):
-    tasks: list[TaskOut]
-    total: int
-    todo: int
-    inProgress: int
-    done: int
-    dismissed: int
-    critical: int
-    high: int
-    medium: int
-    low: int
-
-class TaskCreatePayload(BaseModel):
-    title: str = Field(..., min_length=2, max_length=80)
-    description: Optional[str] = None
-    recommendedSteps: Optional[str] = None
-    priority: str = Field("HIGH")
-    category: str = Field("CUSTOM")
-    competitorId: Optional[str] = None
-    dueDate: Optional[str] = None
-
-class TaskUpdatePayload(BaseModel):
-    title: Optional[str] = Field(None, min_length=2, max_length=80)
-    description: Optional[str] = None
-    recommendedSteps: Optional[str] = None
-    priority: Optional[str] = None
-    status: Optional[str] = None
-    category: Optional[str] = None
-    dueDate: Optional[str] = None
-    jiraIssueUrl: Optional[str] = None
-
-class TaskStatusUpdatePayload(BaseModel):
-    status: str = Field(...)
-    dismissedReason: Optional[str] = None
-
-class TaskStatsResponse(BaseModel):
-    totalActive: int
-    critical: int
-    competitiveScore: Optional[int] = None
-    confidenceScore: Optional[int] = None
-    productSimilarity: Optional[int] = None
-    customerOverlap: Optional[int] = None
-    marketOverlap: Optional[int] = None
-    businessModelOverlap: Optional[int] = None
-    reason: Optional[str] = None
-    isAccepted: Optional[bool] = None
-    isActive: Optional[bool] = None
-    customType: Optional[str] = None
-    effectiveType: Optional[str] = None
-    notes: Optional[str] = None
-    lastResearchedAt: Optional[str] = None
-    researchStatus: Optional[str] = None
-
-
-class CompetitorsSummary(BaseModel):
-    total: int
-    active: int
-    archived: int
-    pendingReview: int
-
-
-class CompetitorsListResponse(BaseModel):
-    """Response for GET /api/competitors."""
-    competitors: list[CompetitorOut]
-    summary: CompetitorsSummary
-
-
-class ManualCompetitorRequest(BaseModel):
-    """Body for POST /api/competitors/manual."""
-    name: str = Field(..., description="Name of the competitor")
-    website: str = Field(..., description="Website URL of the competitor")
-
-class CompetitorEditPayload(BaseModel):
-    """Body for PUT /api/competitors/{id}"""
-    name: Optional[str] = Field(None, min_length=2, max_length=100)
-    website: Optional[str] = None
-    notes: Optional[str] = Field(None, max_length=500)
-    customType: Optional[str] = None
-
-
-# --- Intelligence Monitoring Models ---
-
-class IntelligenceDocumentOut(BaseModel):
-    id: str
-    competitorId: str
-    competitorName: Optional[str] = None
-    sourceUrl: str
-    title: Optional[str] = None
-    summary: Optional[str] = None
-    eventType: Optional[str] = None
-    sentiment: Optional[str] = None
-    sentimentConfidence: Optional[int] = None
-    relevanceScore: Optional[int] = None
-    relevanceReason: Optional[str] = None
-    impactScore: Optional[int] = None
-    impactLabel: Optional[str] = None
-    publishedDate: Optional[str] = None
-    createdAt: Optional[str] = None
-
-
-class IntelligenceFeedResponse(BaseModel):
-    documents: list[IntelligenceDocumentOut]
-    total: int
-    hasMore: bool
-
-
-class IntelligenceSummaryResponse(BaseModel):
-    weeklyBrief: Optional[str] = None
-    topThreats: list[dict[str, Any]] = []
-    opportunities: list[dict[str, Any]] = []
-    watchList: list[str] = []
-    strategicRecommendations: list[str] = []
-    generatedAt: Optional[str] = None
-
-
-class CompetitorStats(BaseModel):
-    competitorId: str
-    competitorName: str
-    documentCount: int
-    latestEvent: Optional[str] = None
-    latestEventDate: Optional[str] = None
-
-
-class EventTypeStats(BaseModel):
-    eventType: str
-    count: int
-
-
-class IntelligenceStatsResponse(BaseModel):
-    totalDocuments: int
-    documentsThisWeek: int
-    criticalEvents: int
-    highEvents: int
-    mediumEvents: int
-    lowEvents: int
-    byCompetitor: list[CompetitorStats]
-    byEventType: list[EventTypeStats]
-
-
-class MonitoringJobOut(BaseModel):
-    id: str
-    jobType: str
-    status: str
-    progress: int = 0
-    currentStep: str = ""
-    documentsFound: int
-    documentsProcessed: int
-    startedAt: Optional[str] = None
-    completedAt: Optional[str] = None
-    error: Optional[str] = None
-
-class CheckNowResponse(BaseModel):
-    message: str
-    jobId: str
-    status: str
-
-class CheckStatusResponse(BaseModel):
-    jobId: Optional[str]
-    status: str
-    progress: int
-    currentStep: str
-    documentsFound: int
-    documentsProcessed: int
-    startedAt: Optional[str] = None
-    completedAt: Optional[str] = None
-    error: Optional[str] = None
-
-
-class MonitoringJobsResponse(BaseModel):
-    jobs: list[MonitoringJobOut]
-
-
-# --- Task Models ---
-
-class TaskOut(BaseModel):
-    id: str
-    title: str
-    description: Optional[str] = None
-    recommendedSteps: Optional[str] = None
-    priority: str
-    status: str
-    category: Optional[str] = None
-    sourceType: str
-    competitorId: Optional[str] = None
-    competitorName: Optional[str] = None
-    eventType: Optional[str] = None
-    impactScore: Optional[int] = None
-    jiraIssueUrl: Optional[str] = None
-    dueDate: Optional[str] = None
-    completedAt: Optional[str] = None
-    dismissedAt: Optional[str] = None
-    dismissedReason: Optional[str] = None
-    createdAt: Optional[str] = None
-    updatedAt: Optional[str] = None
 
 class TasksResponse(BaseModel):
     tasks: list[TaskOut]
@@ -535,6 +366,7 @@ class TasksResponse(BaseModel):
     medium: int
     low: int
 
+
 class TaskCreatePayload(BaseModel):
     title: str = Field(..., min_length=2, max_length=80)
     description: Optional[str] = None
@@ -543,6 +375,7 @@ class TaskCreatePayload(BaseModel):
     category: str = Field("CUSTOM")
     competitorId: Optional[str] = None
     dueDate: Optional[str] = None
+
 
 class TaskUpdatePayload(BaseModel):
     title: Optional[str] = Field(None, min_length=2, max_length=80)
@@ -554,9 +387,11 @@ class TaskUpdatePayload(BaseModel):
     dueDate: Optional[str] = None
     jiraIssueUrl: Optional[str] = None
 
+
 class TaskStatusUpdatePayload(BaseModel):
     status: str = Field(...)
     dismissedReason: Optional[str] = None
+
 
 class TaskStatsResponse(BaseModel):
     totalActive: int
@@ -566,11 +401,13 @@ class TaskStatsResponse(BaseModel):
     completedThisWeek: int
     generatedThisWeek: int
 
+
 class TaskDetailResponse(BaseModel):
     task: TaskOut
     sourceDocument: Optional[dict[str, Any]] = None
     sourceTrend: Optional[dict[str, Any]] = None
     sourceAnomaly: Optional[dict[str, Any]] = None
+
 
 class JiraLinkResponse(BaseModel):
     jiraUrl: str

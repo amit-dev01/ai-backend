@@ -1100,6 +1100,7 @@ def update_company_weekly_summary(company_id: str, data: Dict[str, Any]) -> bool
         "opportunities": data.get("opportunities", []),
         "watch_list": data.get("watchList", []),
         "strategic_recommendations": data.get("strategicRecommendations", []),
+        "competitive_velocity": data.get("competitiveVelocity", []),
         "weekly_brief_generated_at": datetime.utcnow().isoformat(),
     }
     try:

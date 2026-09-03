@@ -243,7 +243,7 @@ Business Type: {business_type}"""
 
             for item in scraped_candidates:
                 url = item["url"]
-                scraped_text = item["content"][:3000]
+                scraped_text = item["content"]  # Full content — sliced to 8000 chars inside the prompt
 
                 extract_prompt = f"""You are analyzing a company website to extract structured information. Return only valid JSON, no explanation, no markdown.
 
