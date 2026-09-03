@@ -110,6 +110,8 @@ from win_loss_service import WinLossService
 from models import DealOutcomePayload
 from community_signals_service import CommunitySignalsService
 from pdf_report_service import PDFReportService
+from share_of_voice_service import ShareOfVoiceService
+from github_monitoring_service import GitHubMonitoringService
 
 
 # ---------------------------------------------------------------------------
@@ -889,6 +891,30 @@ async def download_boardroom_pdf_endpoint(
             "Content-Disposition": f"attachment; filename=competitive_intelligence_{company_name}.pdf"
         }
     )
+
+
+@app.get("/api/competitors/share-of-voice")
+async def get_share_of_voice_endpoint(
+    user_id: str = Depends(get_current_user)
+):
+    """Retrieve category-wide Share of Voice (SOV) %, market buzz rankings, and conversational momentum."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    company_id = str(company.get("id", ""))
+    return ShareOfVoiceService.get_category_share_of_voice(company_id)
+
+
+@app.get("/api/competitors/{competitor_id}/github-signals")
+async def get_competitor_github_signals_endpoint(
+    competitor_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """Retrieve open-source technical velocity, release cadence, stargazers, and tech stack distribution."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    return await GitHubMonitoringService.get_competitor_github_signals(competitor_id)
 
 
 @app.post("/api/competitors/{competitor_id}/accept", response_model=CompetitorOut)
