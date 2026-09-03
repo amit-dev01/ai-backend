@@ -100,7 +100,42 @@ class IntelligenceSummaryService:
             velocity_ranked = sorted(competitor_activity.items(), key=lambda x: x[1], reverse=True)
             velocity_str = ", ".join(f"{name} ({count} events)" for name, count in velocity_ranked[:5])
 
-            brief_prompt = f"""You are a Principal Competitive Intelligence Analyst. You have access to {len(docs)} intelligence events from the past 30 days for the company below. Produce a comprehensive, executive-grade strategic brief.
+            # Gather cross-engine intelligence signals
+            engine_signals = []
+            try:
+                from positioning_engine import PositioningEngine
+                radar_data = PositioningEngine.get_positioning_radar(company_id)
+                engine_signals.append(f"Spatial Encroachment: {radar_data.get('strategicPositioningSummary', '')}")
+            except Exception:
+                pass
+
+            try:
+                from pricing_matrix_service import PricingMatrixService
+                p_data = PricingMatrixService.get_category_pricing_matrix(company_id)
+                bms = p_data.get("categoryBenchmarks", {})
+                p_str = f"Pricing Benchmarks: Floor ${bms.get('marketFloorMinima') or 'N/A'}/mo | Median ${bms.get('categoryMedian') or 'N/A'}/mo | Ceiling ${bms.get('marketCeilingMaxima') or 'N/A'}/mo. {p_data.get('strategicRecommendation', '')}"
+                engine_signals.append(p_str)
+            except Exception:
+                pass
+
+            try:
+                from win_loss_service import WinLossService
+                d_data = WinLossService.get_deal_analytics(company_id)
+                if d_data.get("totalDealsLogged", 0) > 0:
+                    engine_signals.append(f"Sales Win/Loss: Win Rate {d_data.get('overallWinRate')}% | Pipeline Lost: ${d_data.get('pipelineLost'):,.0f}. {d_data.get('strategicRecommendation')}")
+            except Exception:
+                pass
+
+            try:
+                from share_of_voice_service import ShareOfVoiceService
+                s_data = ShareOfVoiceService.get_category_share_of_voice(company_id)
+                engine_signals.append(f"Share of Voice: Buzz Leader is '{s_data.get('categoryBuzzLeader')}'. Our Voice: {s_data.get('ourShareOfVoice')}%.")
+            except Exception:
+                pass
+
+            engine_signals_str = "\n".join(f"- {s}" for s in engine_signals)
+
+            brief_prompt = f"""You are a Principal Competitive Intelligence Analyst. You have access to {len(docs)} intelligence events from the past 30 days and quantitative market analytics for the company below. Produce a comprehensive, executive-grade strategic brief.
 Return ONLY valid JSON — no markdown, no explanation.
 
 OUR COMPANY:
@@ -114,6 +149,9 @@ OUR COMPETITORS (accepted):
 
 COMPETITIVE VELOCITY (most active in last 30 days):
 {velocity_str}
+
+QUANTITATIVE SIGNALS (Positioning, Pricing, Win/Loss, Share of Voice):
+{engine_signals_str}
 
 INTELLIGENCE EVENTS (last 30 days, ordered by impact):
 {events_str}

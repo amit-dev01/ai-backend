@@ -46,12 +46,20 @@ This backend powers a real-time Competitive Intelligence (CI) dashboard. Rather 
 
 ---
 
-## ✨ Core Features
+## ✨ Core Capabilities & Mathematical Engines
 
-- 🕵️ **Automated Competitor Discovery:** Enter your company description, and the AI autonomously finds and ranks up to 10 relevant market rivals.
-- 📡 **Live News Monitoring:** Scheduled background jobs that scan the web for recent competitor activity (product launches, pricing changes, PR announcements).
-- 🧠 **AI Strategy Briefs:** Synthesizes hundreds of intelligence documents from the past 7 days into a comprehensive report outlining threats, opportunities, and strategic recommendations.
-- ⚡ **Asynchronous Pipelines:** Robust background processing utilizing `asyncio` to prevent timeouts on long-running LLM scraping tasks.
+- 🧠 **NLP Flagship Product Discovery:** Uses TF-IDF N-Gram Prominence over DOM headers and navigation to extract the competitor's true core revenue driver vs side-features.
+- 📈 **Mathematical Signal Processing (Maxima & Minima):** Applies `scipy.signal.find_peaks` over event and sentiment time-series to detect activity surges (PR waves, product launches) and stagnation/churn troughs.
+- 🏷️ **Pricing Boundaries & Whitespace:** Deterministically computes Market Floor ($P_{min}$), Enterprise Ceiling ($P_{max}$), Category Median, and uncontested whitespace gaps.
+- ⏳ **Historical Snapshots & Step-Function Deltas:** Tracks immutable weekly state to compute exact price hikes, fee drops, and flagship product pivots across time.
+- 🎯 **2D Spatial Positioning Radar:** Projects all rivals onto a 2D coordinate grid (Price Tier vs Product Scope), calculating Euclidean threat encroachment and open market niches.
+- ⚔️ **Tactical Sales Battlecards:** 1-page sales weapons with quick dismissals, landmines to lay, where we win vs where they win, and pricing counters.
+- 💼 **Win/Loss Deal Intelligence:** Logs commercial sales outcomes to compute head-to-head win rates, revenue at risk, and primary loss drivers.
+- 🗣️ **Community Voice Ingestion:** Live Reddit and Hacker News customer complaints, praise, and net sentiment.
+- 📊 **Share of Voice (SOV) & Buzz Momentum:** Quantifies conversational footprint percentage and categorizes buzz momentum.
+- 💻 **GitHub Technical Velocity:** Tracks open-source releases, stargazer growth, and tech stack distribution.
+- 📄 **Executive Boardroom PDF Export:** Generates multi-page vector PDF briefing documents with ReportLab for board meetings.
+- 🚨 **Autonomous Real-Time Webhooks:** Instant Slack Block Kit notifications dispatched when impact score $\ge 80$ or pricing shifts occur.
 
 ---
 
@@ -116,27 +124,38 @@ Visit `http://localhost:8000/docs` to view the interactive Swagger API documenta
 Here are the primary endpoints exposed by the FastAPI server:
 
 <details>
-<summary><b>Authentication & Onboarding</b></summary>
+<summary><b>1. Advanced Competitive Intelligence (12 Core Weapons)</b></summary>
 
-- `POST /api/auth/signup` - Register a new organization owner.
-- `POST /api/auth/login` - Authenticate and retrieve JWT.
-- `POST /api/company/profile` - Set the initial company profile to bootstrap discovery.
+- `GET /api/competitors/{id}/battlecard` - Generate a 1-page tactical sales battlecard.
+- `GET /api/competitors/{id}/signals` - Mathematical signal processing (maxima, minima, volatility, flagship).
+- `GET /api/competitors/pricing-matrix` - Live category pricing grid, benchmarks, and whitespace gaps.
+- `GET /api/competitors/{id}/snapshots` - Chronological historical state timeline.
+- `GET /api/competitors/{id}/deltas` - Step-function price changes and product pivots.
+- `GET /api/competitors/positioning-radar` - 2D spatial coordinate map, quadrant nodes, and encroachment distance.
+- `POST /api/deals/outcome` - Record commercial sales deal outcomes (WON, LOST, TIED).
+- `GET /api/deals/analytics` - Win rates, revenue at risk, and loss root causes.
+- `GET /api/competitors/{id}/community-signals` - Live Reddit & Hacker News customer voice.
+- `GET /api/reports/boardroom-pdf` - Downloadable executive boardroom PDF report.
+- `GET /api/competitors/share-of-voice` - Category Share of Voice & buzz momentum.
+- `GET /api/competitors/{id}/github-signals` - Open-source technical cadence & tech stack.
 </details>
 
 <details>
-<summary><b>Competitor Management</b></summary>
+<summary><b>2. Intelligence Feed & Executive Briefs</b></summary>
 
-- `GET /api/competitors` - Retrieve tracked competitors and their threat scores.
-- `POST /api/competitors/{id}/research` - Trigger a deep AI scrape of a specific competitor.
-- `DELETE /api/competitors/{id}` - Archive/Delete a tracked competitor.
-</details>
-
-<details>
-<summary><b>Intelligence & Strategy</b></summary>
-
-- `GET /api/intelligence/feed` - Infinite scrolling feed of recent competitor news events.
-- `GET /api/intelligence/strategy-brief` - Retrieve the latest weekly AI executive summary.
+- `GET /api/intelligence/feed` - Real-time scrolling feed of competitor events.
+- `GET /api/intelligence/strategy-brief` - Weekly executive memo synthesizing multi-engine signals.
 - `POST /api/intelligence/generate-summary` - Force a manual generation of the Strategy Brief.
+</details>
+
+<details>
+<summary><b>3. Competitor Management</b></summary>
+
+- `GET /api/competitors` - Retrieve tracked competitors and threat scores.
+- `POST /api/competitors/{id}/research` - Trigger deep AI scrape of a competitor.
+- `DELETE /api/competitors/{id}` - Archive/Delete a tracked competitor.
+- `POST /api/competitors/{id}/accept` - Accept a recommended competitor.
+- `POST /api/competitors/{id}/reject` - Reject a recommended competitor.
 </details>
 
 ---
