@@ -22,9 +22,10 @@ This document is the **complete, end-to-end technical API contract and integrati
 
 ## 1. Global API Standards & Authentication
 
+* **Production Base URL (Live):** `https://ai-backend-zfq1.onrender.com`
+* **Production Swagger UI (Live Docs):** [https://ai-backend-zfq1.onrender.com/docs](https://ai-backend-zfq1.onrender.com/docs)
+* **Production OpenAPI Spec (JSON):** `https://ai-backend-zfq1.onrender.com/openapi.json`
 * **Local Development Base URL:** `http://localhost:8000`
-* **Production Base URL:** `https://your-render-app.onrender.com`
-* **Interactive Swagger UI:** `http://localhost:8000/docs`
 * **Authentication Scheme:** Standard HTTP Bearer Token.
   ```http
   Authorization: Bearer <supabase_jwt_token>

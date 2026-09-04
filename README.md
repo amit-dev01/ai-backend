@@ -229,7 +229,9 @@ $$\Delta P_{\min} = P_{\min}(t) - P_{\min}(t-1) \quad \Big( \text{Percentage: } 
 
 ## ⚔️ The 16 Enterprise Intelligence Weapons
 
-All capabilities are exposed via REST API endpoints on `http://localhost:8000`:
+- 🌐 **Live Production Base URL:** [`https://ai-backend-zfq1.onrender.com`](https://ai-backend-zfq1.onrender.com)
+- 📖 **Interactive Swagger UI:** [`https://ai-backend-zfq1.onrender.com/docs`](https://ai-backend-zfq1.onrender.com/docs)
+- 📄 **OpenAPI Specification:** [`https://ai-backend-zfq1.onrender.com/openapi.json`](https://ai-backend-zfq1.onrender.com/openapi.json)
 
 | # | Endpoint | Method | Engine | Strategic Deliverable |
 |---|---|:---:|---|---|
@@ -306,10 +308,8 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### 4. Interactive API Documentation
-Open your browser to explore and test all 12 weapons via Swagger UI:
-```
-http://localhost:8000/docs
-```
+- **Production (Live):** [`https://ai-backend-zfq1.onrender.com/docs`](https://ai-backend-zfq1.onrender.com/docs)
+- **Local Development:** `http://localhost:8000/docs`
 
 ---
 
