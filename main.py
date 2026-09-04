@@ -76,6 +76,7 @@ from database import (
     save_manual_competitor,
     get_intelligence_feed,
     get_intelligence_stats,
+    get_recent_intelligence_documents,
     get_monitoring_jobs_history,
     get_active_monitoring_job,
     cleanup_stale_monitoring_jobs,
