@@ -918,7 +918,7 @@ export interface TaskStatusUpdatePayload {
 | # | Method | Full URL Path | Description | Key Params / Request Body |
 |---|:---:|---|---|---|
 | **1** | `GET` | `/` | Service health check | None |
-| **2** | `POST` | `/analyze` | Run full Crawl4AI deep research pipeline | Body: `CompetitorRequest` |
+| **2** | `POST` | `/analyze` | Run full Jina Reader AI deep research pipeline | Body: `CompetitorRequest` |
 | **3** | `POST` | `/api/auth/signup` | Register new user via Supabase | Body: `AuthRequest` |
 | **4** | `POST` | `/api/auth/login` | Login user and retrieve JWT | Body: `AuthRequest` |
 | **5** | `GET` | `/api/company/profile` | Get company onboarding profile & brief | Auth Header |

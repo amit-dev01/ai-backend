@@ -1223,7 +1223,7 @@ async def analyze(req: CompetitorRequest) -> CompetitorReport:
     """Run the full competitor analysis pipeline.
 
     Steps:
-        1. Scrape the competitor's website using Crawl4AI.
+        1. Scrape the competitor's website using Jina Reader API.
         2. Best-effort scrape any provided social URLs.
         3. Extract structured signals from scraped content via LLM.
         4. Perform deep competitive analysis via LLM.
