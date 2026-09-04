@@ -436,3 +436,25 @@ class SemanticSimilarityPayload(BaseModel):
 
 class BusinessSentimentPayload(BaseModel):
     text: str = Field(..., description="Text to analyze for financial and corporate sentiment")
+
+
+class PlaybookRequestPayload(BaseModel):
+    competitor_id: str = Field(..., description="UUID or identifier of the competitor")
+    event_context: Optional[dict[str, Any]] = Field(default=None, description="Optional specific event details")
+
+
+class JiraCreatePayload(BaseModel):
+    jira_domain: str = Field(..., description="Your Atlassian domain, e.g. 'mycompany.atlassian.net'")
+    email: str = Field(..., description="Your Atlassian account email")
+    api_token: str = Field(..., description="Atlassian API token")
+    project_key: str = Field(..., description="Project Key, e.g. 'PROD' or 'ENG'")
+    summary: str = Field(..., description="Summary / Title of the issue")
+    description: str = Field(..., description="Issue details / acceptance criteria")
+    issue_type: Optional[str] = Field("Task", description="Task, Story, Bug")
+    priority: Optional[str] = Field("High", description="Highest, High, Medium, Low")
+
+
+class WhatsAppAlertPayload(BaseModel):
+    recipient_phone: str = Field(..., description="Recipient phone number with country code, e.g. '+1234567890'")
+    alert_text: str = Field(..., description="Formatted alert message to send to the team")
+    custom_webhook_url: Optional[str] = Field(None, description="Optional custom webhook URL (Zapier/Make/Slack/Telegram)")

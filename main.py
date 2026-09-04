@@ -115,7 +115,15 @@ from github_monitoring_service import GitHubMonitoringService
 from ml_anomaly_detector import CompetitorAnomalyDetector
 from ml_topic_clustering import TopicClusteringEngine
 from ml_huggingface_service import HuggingFaceService
-from models import DealOutcomePayload, SemanticSimilarityPayload, BusinessSentimentPayload
+from action_dispatch_service import ActionDispatchService
+from models import (
+    DealOutcomePayload,
+    SemanticSimilarityPayload,
+    BusinessSentimentPayload,
+    PlaybookRequestPayload,
+    JiraCreatePayload,
+    WhatsAppAlertPayload,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1007,6 +1015,54 @@ async def analyze_business_sentiment_endpoint(
 ):
     """Analyze corporate & financial sentiment using Hugging Face (ProsusAI/finbert) or heuristic fallback."""
     return await HuggingFaceService.analyze_business_sentiment(text=payload.text)
+
+
+@app.post("/api/actions/playbook")
+async def generate_action_playbook_endpoint(
+    payload: PlaybookRequestPayload,
+    user_id: str = Depends(get_current_user)
+):
+    """Generate an executable 4-department tactical playbook (Product, Sales, Marketing, Exec) for a competitor move."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    company_id = str(company.get("id", ""))
+    return await ActionDispatchService.generate_departmental_playbook(
+        company_id=company_id,
+        competitor_id=payload.competitor_id,
+        event_context=payload.event_context
+    )
+
+
+@app.post("/api/actions/jira")
+async def create_jira_issue_endpoint(
+    payload: JiraCreatePayload,
+    user_id: str = Depends(get_current_user)
+):
+    """Directly create a ticket in Atlassian Jira Cloud via REST API v3."""
+    return await ActionDispatchService.create_jira_issue(
+        jira_domain=payload.jira_domain,
+        email=payload.email,
+        api_token=payload.api_token,
+        project_key=payload.project_key,
+        summary=payload.summary,
+        description=payload.description,
+        issue_type=payload.issue_type or "Task",
+        priority=payload.priority or "High"
+    )
+
+
+@app.post("/api/actions/whatsapp")
+async def dispatch_whatsapp_alert_endpoint(
+    payload: WhatsAppAlertPayload,
+    user_id: str = Depends(get_current_user)
+):
+    """Dispatch an instant alert to WhatsApp or a team Mobile Webhook."""
+    return await ActionDispatchService.dispatch_whatsapp_alert(
+        recipient_phone=payload.recipient_phone,
+        alert_text=payload.alert_text,
+        custom_webhook_url=payload.custom_webhook_url
+    )
 
 
 @app.post("/api/competitors/{competitor_id}/accept", response_model=CompetitorOut)
