@@ -1,0 +1,20 @@
+.bounceCardsContainer {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.bounceCardsContainer .card {
+  position: absolute;
+  width: 230px;
+  height: 140px;
+  border-radius: 16px;
+  overflow: visible;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.bounceCardsContainer .card:hover {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.15);
+}

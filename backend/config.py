@@ -6,9 +6,15 @@ including the Groq API key, base URL, and model selections.
 """
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Prioritize .env located in the same directory as this file
+env_file = Path(__file__).resolve().parent / ".env"
+if env_file.exists():
+    load_dotenv(dotenv_path=env_file)
+else:
+    load_dotenv()
 
 GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
 GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"

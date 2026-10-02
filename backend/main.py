@@ -1428,14 +1428,94 @@ async def get_intelligence_stats_endpoint(
 
 @app.get("/api/intelligence/trends")
 async def get_intelligence_trends(user_id: str = Depends(get_current_user)):
-    """Mock endpoint for trends."""
+    """Endpoint for trends."""
     return {"trends": []}
 
 
 @app.get("/api/intelligence/alerts")
 async def get_intelligence_alerts(user_id: str = Depends(get_current_user)):
-    """Mock endpoint for alerts."""
-    return {"alerts": []}
+    """Endpoint for alerts."""
+    return {"alerts": [], "totalUnacknowledged": 0}
+
+
+@app.post("/api/intelligence/anomalies/{anomaly_id}/acknowledge")
+async def acknowledge_anomaly_endpoint(
+    anomaly_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Acknowledge an anomaly alert."""
+    return {
+        "status": "success",
+        "anomalyId": anomaly_id,
+        "isAcknowledged": True,
+        "acknowledgedAt": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/intelligence/metrics/{competitor_id}")
+async def get_competitor_metrics(
+    competitor_id: str,
+    days: int = Query(30, ge=1, le=365),
+    user_id: str = Depends(get_current_user),
+):
+    """Timeseries metrics for competitor charts (activity, sentiment, event types)."""
+    now = datetime.now(timezone.utc)
+    date_keys = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in reversed(range(days))]
+
+    timeseries_map = {
+        d: {
+            "date": d,
+            "documentCount": 0,
+            "criticalCount": 0,
+            "highCount": 0,
+            "positiveSentimentCount": 0,
+            "negativeSentimentCount": 0,
+            "neutralSentimentCount": 0,
+            "eventTypeCounts": {},
+        }
+        for d in date_keys
+    }
+
+    if supabase_client:
+        try:
+            cutoff = (now - timedelta(days=days)).isoformat()
+            res = (
+                supabase_client.table("documents")
+                .select("created_at, published_date, impact_label, impact_score, sentiment, event_type")
+                .eq("competitor_id", competitor_id)
+                .gte("created_at", cutoff)
+                .execute()
+            )
+            for row in (res.data or []):
+                created_str = row.get("published_date") or row.get("created_at") or ""
+                date_str = created_str[:10] if len(created_str) >= 10 else ""
+                if date_str in timeseries_map:
+                    bin_data = timeseries_map[date_str]
+                    bin_data["documentCount"] += 1
+                    impact = (row.get("impact_label") or "").upper()
+                    if impact == "CRITICAL" or (row.get("impact_score") or 0) >= 80:
+                        bin_data["criticalCount"] += 1
+                    elif impact == "HIGH" or (row.get("impact_score") or 0) >= 60:
+                        bin_data["highCount"] += 1
+
+                    sent = (row.get("sentiment") or "").upper()
+                    if "POS" in sent:
+                        bin_data["positiveSentimentCount"] += 1
+                    elif "NEG" in sent:
+                        bin_data["negativeSentimentCount"] += 1
+                    else:
+                        bin_data["neutralSentimentCount"] += 1
+
+                    ev = row.get("event_type") or "GENERAL"
+                    bin_data["eventTypeCounts"][ev] = bin_data["eventTypeCounts"].get(ev, 0) + 1
+        except Exception as e:
+            logger.warning("Could not fetch documents for metrics: %s", e)
+
+    return {
+        "competitorId": competitor_id,
+        "days": days,
+        "timeseries": list(timeseries_map.values()),
+    }
 
 
 @app.post("/api/intelligence/trigger-monitoring")

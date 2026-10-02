@@ -1195,6 +1195,9 @@ def create_task(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not supabase_client:
         return None
     try:
+        # Protect against varchar(80) overflow on title column in database
+        if "title" in payload and payload["title"]:
+            payload["title"] = str(payload["title"])[:80]
         res = supabase_client.table("tasks").insert(payload).execute()
         return res.data[0] if res and res.data else None
     except Exception as exc:

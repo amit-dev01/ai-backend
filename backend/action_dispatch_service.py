@@ -160,7 +160,7 @@ Produce this exact JSON structure with concrete, actionable text (no vague place
                 "priority": prod_dir.get("priority", "HIGH"),
                 "competitor_id": competitor_id,
                 "competitor_name": comp_name,
-                "source_type": "PLAYBOOK"
+                "source_type": "AI_GENERATED"
             })
         except Exception as exc:
             logger.warning("Failed to auto-save playbook task: %s", exc)

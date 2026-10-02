@@ -1,3 +1,23 @@
-venv/
+# Python / Backend
+backend/venv/
+backend/.env
+backend/__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+backend/reports/*.pdf
 .env
-__pycache__/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env.local
+frontend/.env.*.local
+*.log
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
