@@ -29,38 +29,68 @@ if JINA_API_KEY:
     HEADERS["Authorization"] = f"Bearer {JINA_API_KEY}"
 
 
-async def scrape_website(url: str, bypass_cache: bool = False) -> str:
-    """Scrape a competitor's website via Jina Reader and return clean Markdown.
+async def _direct_fallback_scrape(url: str) -> str:
+    """Direct HTTP fallback using BeautifulSoup if Jina Reader fails or rate-limits."""
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    async with httpx.AsyncClient(timeout=25, follow_redirects=True) as client:
+        response = await client.get(url, headers=headers)
+        response.raise_for_status()
 
-    Always fetches fresh content — no in-process caching. This ensures
-    monitoring runs see real page changes. Deduplication is handled upstream
-    via content-hash comparison against the DB url_cache table.
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(response.text, "html.parser")
+    for el in soup(["script", "style", "nav", "footer", "header", "noscript", "svg"]):
+        el.decompose()
+
+    text = soup.get_text(separator="\n", strip=True)
+    if not text:
+        raise Exception(f"Direct fallback scrape returned empty content for {url}")
+    return text
+
+
+async def scrape_website(url: str, bypass_cache: bool = False) -> str:
+    """Scrape a competitor's website via Jina Reader with automatic direct fallback.
+
+    Always fetches fresh content. First attempts Jina Reader (with full JS execution).
+    If Jina fails, times out, or rate-limits, falls back directly to HTTP + BeautifulSoup.
 
     Args:
         url: The full URL of the website to scrape.
         bypass_cache: Kept for backward compatibility, has no effect.
 
     Returns:
-        The scraped page content as Markdown.
+        The scraped page content as Markdown or clean text.
 
     Raises:
-        Exception: If the request fails or returns no content.
+        Exception: If both Jina and the direct fallback fail.
     """
     url_clean = url.strip()
 
     logger.info("Fetching via Jina Reader: %s", url_clean)
     jina_url = f"{JINA_BASE}{url_clean}"
 
-    async with httpx.AsyncClient(timeout=45, follow_redirects=True) as client:
-        response = await client.get(jina_url, headers=HEADERS)
-        response.raise_for_status()
+    try:
+        async with httpx.AsyncClient(timeout=45, follow_redirects=True) as client:
+            response = await client.get(jina_url, headers=HEADERS)
+            response.raise_for_status()
 
-    content = response.text.strip()
+        content = response.text.strip()
+        if content:
+            logger.info("Scraped %s via Jina — %d characters", url_clean, len(content))
+            return content
+    except Exception as exc:
+        logger.warning("Jina Reader scrape failed for %s (%s). Attempting direct HTTP fallback...", url_clean, exc)
 
-    if not content:
-        raise Exception(f"Jina returned empty content for {url_clean}")
-
-    logger.info("Scraped %s — %d characters", url_clean, len(content))
+    # Fallback to direct scraping
+    logger.info("Executing direct fallback scrape for: %s", url_clean)
+    content = await _direct_fallback_scrape(url_clean)
+    logger.info("Direct fallback scrape succeeded for %s — %d characters", url_clean, len(content))
     return content
 
 
