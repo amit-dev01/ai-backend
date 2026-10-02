@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://ai-backend-zfq1.onrender.com/:path*"
-    }
-  ]
-}
