@@ -926,6 +926,7 @@ def get_intelligence_feed(
             .select("*, competitors(name)", count="exact")
             .eq("company_id", company_id)
             .eq("is_processed", True)
+            .gte("relevance_score", 45)
         )
         if competitor_id:
             query = query.eq("competitor_id", competitor_id)
@@ -966,6 +967,7 @@ def get_recent_intelligence_documents(company_id: str, days: int = 7, limit: int
             .select("*, competitors(name)")
             .eq("company_id", company_id)
             .eq("is_processed", True)
+            .gte("relevance_score", 45)
             .gte("created_at", cutoff)
             .order("impact_score", desc=True)
             .limit(limit)

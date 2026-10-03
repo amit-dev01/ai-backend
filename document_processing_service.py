@@ -346,8 +346,12 @@ Relevance scoring:
         )
 
         # ----------------------------------------------------------------
-        # STEP 7 — Save to database
+        # STEP 7 — Save to database (only if relevant)
         # ----------------------------------------------------------------
+        if relevance_score < 40:
+            logger.info("Skipping low-relevance noise document (%d/100): %s (%s)", relevance_score, title, url)
+            return None
+
         doc_payload = {
             "competitor_id": competitor_id,
             "company_id": company_id,

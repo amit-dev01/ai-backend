@@ -339,9 +339,9 @@ async def searchCompetitorNews(competitor_name: str) -> list[dict]:
     except Exception as exc:
         logger.warning("NewsAPI failed (%s), trying Serper News", str(exc))
 
-    # 2. Serper /news with exact name
+    # 2. Serper /news with exact name and tech/business context
     try:
-        raw = await _search_serper_news(f'"{competitor_name}" news')
+        raw = await _search_serper_news(f'"{competitor_name}" (software OR app OR platform OR startup OR company OR tech)')
         results = [r for r in raw if _title_mentions_competitor(r.get("title", ""), competitor_name)]
         if results:
             logger.info(
@@ -355,7 +355,7 @@ async def searchCompetitorNews(competitor_name: str) -> list[dict]:
 
     # 3. Exa fallback
     try:
-        raw = await _search_exa(f"latest news about {competitor_name}")
+        raw = await _search_exa(f"latest company and product news about {competitor_name}")
         results = [r for r in raw if _title_mentions_competitor(r.get("title", ""), competitor_name)]
         logger.info(
             "Competitor news via Exa fallback: %d/%d relevant for '%s'",
