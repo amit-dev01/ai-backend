@@ -5,9 +5,10 @@ Defines request schemas, intermediate data structures, and all response schemas.
 """
 
 from datetime import datetime
+import json
 from typing import Any, Optional
 
-from pydantic import BaseModel, HttpUrl, Field
+from pydantic import BaseModel, HttpUrl, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -261,12 +262,31 @@ class IntelligenceFeedResponse(BaseModel):
 
 class IntelligenceSummaryResponse(BaseModel):
     weeklyBrief: Optional[str] = None
-    topThreats: list[dict[str, Any]] = []
-    opportunities: list[dict[str, Any]] = []
-    watchList: list[str] = []
+    topThreats: list[Any] = []
+    opportunities: list[Any] = []
+    watchList: list[Any] = []
     strategicRecommendations: list[Any] = []  # list[dict] with priority/rationale/owner
     competitiveVelocity: list[Any] = []       # list[dict] with competitor/eventCount/trend
     generatedAt: Optional[str] = None
+
+    @field_validator(
+        "topThreats", "opportunities", "watchList", "strategicRecommendations", "competitiveVelocity",
+        mode="before"
+    )
+    @classmethod
+    def parse_json_list(cls, v: Any) -> list:
+        if not v:
+            return []
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                pass
+        return []
 
 
 class CompetitorStats(BaseModel):

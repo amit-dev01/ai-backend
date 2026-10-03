@@ -18,8 +18,8 @@ else:
 
 GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
 GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
-LLM_MODEL: str = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
-EXTRACTION_MODEL: str = os.getenv("EXTRACTION_MODEL", "llama-3.1-8b-instant")
+LLM_MODEL: str = os.getenv("LLM_MODEL", "qwen/qwen3.8-27b")
+EXTRACTION_MODEL: str = os.getenv("EXTRACTION_MODEL", "qwen/qwen3.8-27b")
 
 SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")

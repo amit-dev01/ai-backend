@@ -62,11 +62,12 @@ def _clean_and_parse_json(text: str) -> Any:
 
 
 async def _call_groq(prompt: str, json_mode: bool = False, model: str = EXTRACTION_MODEL) -> Any:
-    """Call Groq API, retrying once after 2s delay on error."""
+    """Call Groq API, retrying once after 2s delay on error with automatic model fallback."""
+    current_model = model or EXTRACTION_MODEL or "qwen/qwen3.8-27b"
     for attempt in range(2):
         try:
             response = await client.chat.completions.create(
-                model=model,
+                model=current_model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"} if (json_mode and attempt == 0) else None,
                 temperature=0.15,
@@ -76,7 +77,9 @@ async def _call_groq(prompt: str, json_mode: bool = False, model: str = EXTRACTI
                 return _clean_and_parse_json(raw)
             return raw.strip()
         except Exception as exc:
-            logger.warning("Groq call attempt %d failed: %s", attempt + 1, str(exc))
+            logger.warning("Groq call attempt %d with model %s failed: %s", attempt + 1, current_model, str(exc))
+            if "model_not_found" in str(exc) and current_model != "qwen/qwen3.8-27b":
+                current_model = "qwen/qwen3.8-27b"
             if attempt == 0:
                 await asyncio.sleep(2.0)
             else:

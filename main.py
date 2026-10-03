@@ -1379,13 +1379,27 @@ async def get_intelligence_summary_endpoint(
     if not company:
         return IntelligenceSummaryResponse()
 
+    def _safe_list(val: Any) -> list:
+        if not val:
+            return []
+        if isinstance(val, list):
+            return val
+        if isinstance(val, str):
+            try:
+                p = json.loads(val)
+                if isinstance(p, list):
+                    return p
+            except Exception:
+                pass
+        return []
+
     return IntelligenceSummaryResponse(
         weeklyBrief=company.get("weekly_brief"),
-        topThreats=company.get("top_threats") or [],
-        opportunities=company.get("opportunities") or [],
-        watchList=company.get("watch_list") or [],
-        strategicRecommendations=company.get("strategic_recommendations") or [],
-        competitiveVelocity=company.get("competitive_velocity") or [],
+        topThreats=_safe_list(company.get("top_threats")),
+        opportunities=_safe_list(company.get("opportunities")),
+        watchList=_safe_list(company.get("watch_list")),
+        strategicRecommendations=_safe_list(company.get("strategic_recommendations")),
+        competitiveVelocity=_safe_list(company.get("competitive_velocity")),
         generatedAt=company.get("weekly_brief_generated_at"),
     )
 
