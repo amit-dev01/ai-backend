@@ -15,7 +15,8 @@ from urllib.parse import urlparse, urlencode
 from datetime import datetime, timezone
 from pathlib import Path
 
-from typing import Optional
+import json
+from typing import Optional, Any, Dict, List
 import uvicorn
 from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -1442,14 +1443,109 @@ async def get_intelligence_stats_endpoint(
 
 @app.get("/api/intelligence/trends")
 async def get_intelligence_trends(user_id: str = Depends(get_current_user)):
-    """Endpoint for trends."""
-    return {"trends": []}
+    """Get active competitive trends for user's company."""
+    company = get_company_profile(user_id)
+    if not company or not supabase_client:
+        return {"trends": []}
+
+    company_id = str(company.get("id", ""))
+    try:
+        res = (
+            supabase_client.table("documents")
+            .select("id, title, summary, event_type, impact_label, impact_score, competitor_id, published_date, created_at, source_url")
+            .eq("company_id", company_id)
+            .order("created_at", desc=True)
+            .limit(50)
+            .execute()
+        )
+        docs = res.data or []
+
+        comp_res = supabase_client.table("competitors").select("id, name").eq("company_id", company_id).execute()
+        comp_map = {str(c["id"]): c["name"] for c in (comp_res.data or [])}
+
+        by_comp = {}
+        for d in docs:
+            cid = str(d.get("competitor_id", ""))
+            by_comp.setdefault(cid, []).append(d)
+
+        trends = []
+        for cid, cdocs in by_comp.items():
+            cname = comp_map.get(cid, "Tracked Competitor")
+            types = [d.get("event_type") for d in cdocs if d.get("event_type")]
+            top_type = max(set(types), key=types.count) if types else "FEATURE_LAUNCH"
+            highest_impact = max((d.get("impact_score") or 50) for d in cdocs)
+            severity = "CRITICAL" if highest_impact >= 85 else "HIGH" if highest_impact >= 70 else "MEDIUM"
+
+            trends.append({
+                "id": f"trend-{cid}",
+                "isActive": True,
+                "competitorName": cname,
+                "competitorId": cid,
+                "trendType": top_type,
+                "description": f"Surge in {top_type.replace('_', ' ').title()} signals ({len(cdocs)} recent events detected).",
+                "severity": severity,
+                "strategicImplication": cdocs[0].get("summary") or "Competitor is actively expanding product capabilities and market reach.",
+                "detectedAt": cdocs[0].get("published_date") or cdocs[0].get("created_at") or datetime.now(timezone.utc).isoformat(),
+                "sampleDocument": {
+                    "title": cdocs[0].get("title", ""),
+                    "summary": cdocs[0].get("summary", ""),
+                    "sourceUrl": cdocs[0].get("source_url", "")
+                }
+            })
+
+        return {"trends": trends}
+    except Exception as exc:
+        logger.error("Failed to generate trends: %s", exc)
+        return {"trends": []}
 
 
 @app.get("/api/intelligence/alerts")
 async def get_intelligence_alerts(user_id: str = Depends(get_current_user)):
-    """Endpoint for alerts."""
-    return {"alerts": [], "totalUnacknowledged": 0}
+    """Get active competitive intelligence alerts for user's company."""
+    company = get_company_profile(user_id)
+    if not company or not supabase_client:
+        return {"alerts": [], "totalUnacknowledged": 0}
+
+    company_id = str(company.get("id", ""))
+    try:
+        res = (
+            supabase_client.table("documents")
+            .select("id, title, summary, event_type, impact_label, impact_score, competitor_id, published_date, created_at")
+            .eq("company_id", company_id)
+            .in_("impact_label", ["CRITICAL", "HIGH"])
+            .order("created_at", desc=True)
+            .limit(20)
+            .execute()
+        )
+        docs = res.data or []
+
+        comp_res = supabase_client.table("competitors").select("id, name").eq("company_id", company_id).execute()
+        comp_map = {str(c["id"]): c["name"] for c in (comp_res.data or [])}
+
+        alerts = []
+        for d in docs:
+            cid = str(d.get("competitor_id", ""))
+            cname = comp_map.get(cid, "Tracked Competitor")
+            impact = d.get("impact_label") or "HIGH"
+            urgency = "ACT_NOW" if impact == "CRITICAL" else "MONITOR"
+            alerts.append({
+                "id": str(d.get("id")),
+                "type": "ANOMALY" if impact == "CRITICAL" else "TREND",
+                "urgency": urgency,
+                "title": d.get("title") or f"{cname} Activity Alert",
+                "description": d.get("summary") or d.get("title") or "Significant competitive event detected.",
+                "competitorName": cname,
+                "competitorId": cid,
+                "impactScore": d.get("impact_score") or (90 if impact == "CRITICAL" else 75),
+                "severity": impact,
+                "isAcknowledged": False,
+                "createdAt": d.get("published_date") or d.get("created_at") or datetime.now(timezone.utc).isoformat(),
+            })
+
+        return {"alerts": alerts, "totalUnacknowledged": len(alerts)}
+    except Exception as exc:
+        logger.error("Failed to fetch alerts: %s", exc)
+        return {"alerts": [], "totalUnacknowledged": 0}
 
 
 @app.post("/api/intelligence/anomalies/{anomaly_id}/acknowledge")
