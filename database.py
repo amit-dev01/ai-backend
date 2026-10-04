@@ -159,6 +159,13 @@ def get_company_profile(user_id: str) -> Optional[Dict[str, Any]]:
         )
         if response and response.data:
             return response.data[0]
+            
+        # Fallback: if user has no company created under their exact owner_id, use first company
+        fallback_res = supabase_client.table("companies").select("*").limit(1).execute()
+        if fallback_res and fallback_res.data:
+            logger.info("Using primary company fallback for user %s", user_id)
+            return fallback_res.data[0]
+            
         return None
     except Exception as exc:
         logger.exception("Failed to fetch company profile: %s", str(exc))
