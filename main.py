@@ -118,6 +118,7 @@ from conversational_agent_service import ConversationalAgentService
 from battle_simulator_service import BattleSimulatorService
 from web_presence_service import WebPresenceService
 from visual_diff_service import VisualDiffService
+from product_teardown_service import ProductTeardownService
 from models import (
     DealOutcomePayload,
     SemanticSimilarityPayload,
@@ -797,6 +798,25 @@ async def get_product_portfolio_matrix_endpoint(
     company = get_company_profile(user_id) if user_id else None
     company_id = str(company.get("id", "")) if company else ""
     return VisualDiffService.get_product_portfolio_matrix(company_id)
+
+
+@app.get("/api/competitors/{competitor_id}/products-teardown")
+async def get_competitor_products_teardown_endpoint(
+    competitor_id: str,
+    user_id: Optional[str] = Depends(get_optional_user)
+):
+    """Retrieve deep product-by-product visual teardown, business role, and counter-playbooks."""
+    return await ProductTeardownService.get_teardown_for_competitor(competitor_id)
+
+
+@app.post("/api/competitors/extract-product-visuals")
+async def extract_product_visuals_endpoint(
+    payload: dict,
+    user_id: Optional[str] = Depends(get_optional_user)
+):
+    """Extract real OpenGraph, Twitter, and hero product visuals from any given competitor URL."""
+    url = payload.get("url") or payload.get("website_url") or ""
+    return await ProductTeardownService.extract_product_visual_assets(url)
 
 
 @app.get("/api/competitors/{competitor_id}/signals")
