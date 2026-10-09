@@ -159,7 +159,13 @@ Generate a battle-tested JSON battlecard with this exact structure:
     {{"theirClaim": "Secondary claim they make", "ourRebuttal": "How the sales rep counters it"}}
   ],
   "pricingCounterStrategy": "How to handle their pricing (whether they are cheaper or more expensive). How we prove superior ROI.",
-  "targetProspectProfile": "The exact prospect persona that is a slam-dunk win for us against {comp_name}."
+  "targetProspectProfile": "The exact prospect persona that is a slam-dunk win for us against {comp_name}.",
+  "swotAnalysis": {{
+    "strengths": ["Top structural advantage {comp_name} possesses", "Secondary advantage they have in market"],
+    "weaknesses": ["Core technical or architectural vulnerability of {comp_name}", "Customer friction point or churn trigger"],
+    "opportunities": ["Whitespace gap or customer segment they ignore that we can capture", "Partnership or integration opening for our company"],
+    "threats": ["Feature expansion or pricing pressure {comp_name} could inflict on us", "Enterprise account encroachment risk"]
+  }}
 }}
 
 Return only valid JSON, no markdown code blocks, no preamble."""
@@ -179,24 +185,31 @@ Return only valid JSON, no markdown code blocks, no preamble."""
                 "quickDismissal": f"{comp_name} is known in the space, but our architecture offers significantly deeper integration and value for your specific use case.",
                 "flagshipMatchup": {
                     "competitorFlagship": flagship_product,
-                    "ourCounter": our_products_str,
-                    "verdict": f"{our_company} provides a more targeted solution."
+                    "ourCounter": f"{our_company} Core Platform",
+                    "verdict": f"{our_company} delivers higher enterprise ROI and flexibility."
                 },
                 "landminesToLay": [
-                    f"Ask {comp_name} how they handle high-volume scalability without hidden enterprise fees.",
-                    f"Inquire about their typical implementation timeline and required engineering overhead.",
-                    f"Ask about their roadmap commitment to this specific workflow."
+                    f"Ask {comp_name} how their system handles customized workflows without external add-ons.",
+                    "Ask them about hidden migration or tier upgrade fees after year 1.",
+                    "Ask them about their SLA guarantee for mission-critical operations."
                 ],
                 "whereWeWin": [
-                    {"advantage": "Faster Time-to-Value", "proofPoint": "Lightweight onboarding vs legacy complexity."},
-                    {"advantage": "Modern UX & Workflow", "proofPoint": "Built natively for modern team workflows."},
-                    {"advantage": "Transparent TCO", "proofPoint": "Predictable pricing with no surprise add-ons."}
+                    {"advantage": "Tighter native integrations", "proofPoint": "Direct API architecture eliminating third-party sync lags"},
+                    {"advantage": "Transparent, predictable pricing", "proofPoint": "No surprise per-seat fees or lock-ins"},
+                    {"advantage": "Rapid time-to-value", "proofPoint": "Live deployment within days vs months"}
                 ],
                 "whereTheyWinAndHowToDefend": [
-                    {"theirClaim": "Legacy market presence", "ourRebuttal": "Legacy architecture brings technical debt and slow iteration."}
+                    {"theirClaim": "Longer tenure and brand recognition", "ourRebuttal": "Legacy architecture that is slower to innovate and burdened by technical debt."},
+                    {"theirClaim": "Large catalog of legacy features", "ourRebuttal": "Bloated interface with high training overhead for modern teams."}
                 ],
-                "pricingCounterStrategy": f"Emphasize total cost of ownership against their price boundaries ({pricing_context}).",
-                "targetProspectProfile": f"Fast-moving teams in {our_industry} that prioritize speed and modern architecture."
+                "pricingCounterStrategy": "Highlight total cost of ownership (TCO) and demonstrate how our predictable pricing avoids their seat-tier multiplier penalties.",
+                "targetProspectProfile": f"Fast-growing teams frustrated by {comp_name}'s rigid contracts and slow support.",
+                "swotAnalysis": {
+                    "strengths": [f"Established market presence as {comp_type} rival", "Broad brand awareness in legacy category"],
+                    "weaknesses": ["Slow feature iteration and legacy UI friction", "Escalating pricing and unresponsive customer support"],
+                    "opportunities": ["Underserved mid-market teams seeking modern alternatives", "Targeting unsatisfied customers leaving their platform"],
+                    "threats": ["Aggressive enterprise discounting or bundling", "Native feature catch-up on their next roadmap release"]
+                }
             }
 
         battlecard_data["metadata"] = {

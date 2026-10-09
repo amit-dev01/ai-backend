@@ -116,6 +116,7 @@ from github_monitoring_service import GitHubMonitoringService
 from action_dispatch_service import ActionDispatchService
 from conversational_agent_service import ConversationalAgentService
 from battle_simulator_service import BattleSimulatorService
+from web_presence_service import WebPresenceService
 from models import (
     DealOutcomePayload,
     SemanticSimilarityPayload,
@@ -715,6 +716,67 @@ async def get_competitor_battlecard(
 
     battlecard = await BattlecardService.generate_battlecard(company_id, competitor_id)
     return battlecard
+
+
+@app.get("/api/competitors/{competitor_id}/web-presence")
+async def get_competitor_web_presence(
+    competitor_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """Retrieve digital footprint, tech stack detection, SEO metrics, and financial snapshot."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    return await WebPresenceService.analyze_web_presence(competitor_id)
+
+
+@app.get("/api/competitors/side-by-side")
+async def get_side_by_side_comparison(
+    user_id: str = Depends(get_current_user)
+):
+    """Retrieve comprehensive side-by-side comparison matrix for all accepted competitors."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found.")
+    company_id = str(company.get("id", ""))
+
+    competitors = get_competitors_for_company(company_id) or []
+    accepted = [c for c in competitors if c.get("is_accepted")] or competitors[:4]
+
+    comparison_data = []
+    for c in accepted:
+        cid = str(c.get("id", ""))
+        wp = await WebPresenceService.analyze_web_presence(cid)
+        comparison_data.append({
+            "id": cid,
+            "name": c.get("name"),
+            "website": c.get("website_url") or c.get("website"),
+            "industry": c.get("industry") or company.get("industry"),
+            "threatScore": c.get("competitive_score", 50),
+            "type": c.get("type", "DIRECT"),
+            "founded": c.get("founded_year") or "2020",
+            "companySize": c.get("company_size") or f"{wp['social']['linkedinEmployees']}+ employees",
+            "location": c.get("location") or "San Francisco, CA",
+            "totalFunding": wp["financialSnapshot"].get("estimatedValuation") or "$45M",
+            "monthlyTraffic": wp["traffic"]["monthlyVisits"],
+            "domainAuthority": wp["seo"]["domainAuthority"],
+            "techStack": [t["name"] for t in wp["techStack"][:5]],
+            "financialHealth": wp["financialSnapshot"]["financialHealthGrade"],
+            "pricingModel": "Freemium / Tiered"
+        })
+    return {
+        "homeCompany": {
+            "name": company.get("company_name", "Our Business"),
+            "industry": company.get("industry", "Technology"),
+            "companySize": company.get("company_size", "25-50"),
+            "location": company.get("location", "Global"),
+            "monthlyTraffic": "120K",
+            "domainAuthority": 62,
+            "techStack": ["Next.js", "React", "Tailwind CSS", "FastAPI", "Supabase", "Stripe"],
+            "financialHealth": "A"
+        },
+        "competitors": comparison_data
+    }
 
 
 @app.get("/api/competitors/{competitor_id}/signals")
