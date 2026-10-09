@@ -105,55 +105,7 @@ try:
 except Exception as e:
     log_test("Spatial Positioning Radar", "FAIL", str(e))
 
-# --- Test 9: ML Topic Clustering (KMeans & TF-IDF) ---
-try:
-    from ml_topic_clustering import TopicClusteringEngine
-    docs = [
-        {"title": "Company launches new pricing plan", "summary": "Subscription model reduced to $29 per seat", "competitor_name": "Rival A", "impact_score": 75},
-        {"title": "Competitor updates enterprise discounting", "summary": "Annual pricing tiers revised for enterprise teams", "competitor_name": "Rival B", "impact_score": 80},
-        {"title": "New AI automation feature released", "summary": "Autonomous agent workflow released in public beta", "competitor_name": "Rival A", "impact_score": 90},
-        {"title": "Machine learning model upgrades announced", "summary": "LLM fine-tuning options added to developer platform", "competitor_name": "Rival C", "impact_score": 85}
-    ]
-    cluster_res = TopicClusteringEngine.cluster_intelligence_documents(docs, num_clusters=2)
-    clusters = cluster_res.get("clusters", [])
-    log_test("ML Topic Clustering (KMeans)", "PASS", f"Formed {len(clusters)} clusters with strategic keywords")
-except Exception as e:
-    log_test("ML Topic Clustering (KMeans)", "FAIL", str(e))
 
-# --- Test 10: ML Anomaly Detector (Isolation Forest) ---
-try:
-    from ml_anomaly_detector import CompetitorAnomalyDetector
-    # 4D features: [event_count, impact_score, sentiment, tier_count]
-    features = [
-        [10.0, 50.0, 0.2, 3.0],
-        [12.0, 52.0, 0.1, 3.0],
-        [11.0, 48.0, 0.3, 3.0],
-        [10.0, 51.0, 0.2, 3.0],
-        [9.0,  49.0, 0.0, 3.0],
-        [85.0, 95.0, -0.8, 8.0] # Massive anomaly
-    ]
-    dates = [f"2026-0{i}-01" for i in range(1, 7)]
-    anomaly_res = CompetitorAnomalyDetector.detect_anomalies(features, dates, competitor_name="Rival A")
-    log_test("ML Anomaly Detector", "PASS", f"Has anomaly: {anomaly_res.get('hasAnomalies')}, count={len(anomaly_res.get('anomalies', []))}")
-except Exception as e:
-    log_test("ML Anomaly Detector", "FAIL", str(e))
-
-# --- Test 11: ML HuggingFace / Semantic Relevance ---
-async def test_hf():
-    try:
-        from ml_huggingface_service import HuggingFaceService
-        source = "AI powered market intelligence and competitor tracking"
-        candidates = [
-            "Real-time competitive intelligence software",
-            "Recipe book for Italian pasta cooking"
-        ]
-        res = await HuggingFaceService.compute_semantic_relevance(source, candidates)
-        scores = res.get("scores", [])
-        log_test("ML Semantic Relevance", "PASS", f"Calculated semantic similarity: {scores}")
-    except Exception as e:
-        log_test("ML Semantic Relevance", "FAIL", str(e))
-
-asyncio.run(test_hf())
 
 # --- Test 12: PDF Report Service (ReportLab Vector PDF) ---
 try:

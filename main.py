@@ -113,9 +113,6 @@ from community_signals_service import CommunitySignalsService
 from pdf_report_service import PDFReportService
 from share_of_voice_service import ShareOfVoiceService
 from github_monitoring_service import GitHubMonitoringService
-from ml_anomaly_detector import CompetitorAnomalyDetector
-from ml_topic_clustering import TopicClusteringEngine
-from ml_huggingface_service import HuggingFaceService
 from action_dispatch_service import ActionDispatchService
 from models import (
     DealOutcomePayload,
@@ -947,30 +944,36 @@ async def get_competitor_ml_anomalies_endpoint(
     cname = comp.get("name", "Competitor")
     snapshots = SnapshotService.get_competitor_snapshots(competitor_id)
     
-    features = []
-    dates = []
-    if len(snapshots) >= 4:
-        for s in snapshots:
-            dates.append(s.get("capturedAt", "")[:10])
-            features.append([
-                float(s.get("eventCount", 3)),
-                float(s.get("competitiveScore", 50)),
-                float(s.get("sentimentScore", 0.0)),
-                float(len(s.get("pricingTiers", [])))
-            ])
-    else:
-        base_score = float(comp.get("competitive_score", 50) or 50)
-        dates = ["2026-08-01", "2026-08-08", "2026-08-15", "2026-08-22", "2026-08-29", "2026-09-03"]
-        features = [
-            [3.0, base_score - 5, 0.1, 2.0],
-            [4.0, base_score - 2, 0.2, 2.0],
-            [2.0, base_score, 0.0, 2.0],
-            [3.0, base_score + 1, 0.15, 2.0],
-            [12.0, 85.0, 0.65, 3.0],
-            [5.0, base_score + 4, 0.2, 3.0]
-        ]
+    anomalies = []
+    if snapshots and len(snapshots) >= 2:
+        recent_count = float(snapshots[-1].get("eventCount", 0))
+        prev_counts = [float(s.get("eventCount", 0)) for s in snapshots[:-1]]
+        avg_prev = sum(prev_counts) / len(prev_counts) if prev_counts else 1.0
         
-    return CompetitorAnomalyDetector.detect_anomalies(features, dates, competitor_name=cname)
+        if recent_count > max(avg_prev * 1.8, 4.0):
+            anomalies.append({
+                "date": snapshots[-1].get("capturedAt", "")[:10] or "Recent",
+                "type": "ACTIVITY_SURGE",
+                "severity": "HIGH",
+                "description": f"Activity volume spiked to {int(recent_count)} events ({recent_count/max(avg_prev,1.0):.1f}x historical average)."
+            })
+            
+        sent = float(snapshots[-1].get("sentimentScore", 0.0))
+        if sent < -0.3:
+            anomalies.append({
+                "date": snapshots[-1].get("capturedAt", "")[:10] or "Recent",
+                "type": "SENTIMENT_DROP",
+                "severity": "CRITICAL" if sent < -0.6 else "HIGH",
+                "description": f"Customer sentiment dropped to negative ({sent:.2f})."
+            })
+            
+    return {
+        "competitorName": cname,
+        "hasAnomalies": len(anomalies) > 0,
+        "totalObservations": len(snapshots),
+        "anomalies": anomalies,
+        "status": "ANOMALY_DETECTED" if anomalies else "NORMAL_BASELINE"
+    }
 
 
 @app.get("/api/intelligence/ml-clusters")
@@ -978,7 +981,7 @@ async def get_intelligence_ml_clusters_endpoint(
     num_clusters: int = Query(default=3, ge=2, le=5),
     user_id: str = Depends(get_current_user)
 ):
-    """Cluster all competitive intelligence documents into strategic thematic themes using KMeans."""
+    """Group all competitive intelligence documents into strategic thematic categories."""
     company = get_company_profile(user_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found.")
@@ -986,15 +989,42 @@ async def get_intelligence_ml_clusters_endpoint(
     company_id = str(company.get("id", ""))
     docs = get_recent_intelligence_documents(company_id, limit=50)
     
-    if not docs:
-        docs = [
-            {"title": "Competitor launches new AI Agent Orchestration API", "summary": "Full LLM workflow automation engine released for enterprise developers.", "competitor_name": "Rival Alpha", "impact_score": 85},
-            {"title": "Competitor raises monthly subscription floor to $49", "summary": "Starter tier adjusted from $29 to $49/mo with additional billing add-ons.", "competitor_name": "Rival Beta", "impact_score": 75},
-            {"title": "Competitor appoints new Chief Commercial Officer", "summary": "VP of Global Enterprise Sales hired to lead European expansion.", "competitor_name": "Rival Gamma", "impact_score": 60},
-            {"title": "Competitor achieves SOC 2 Type II and HIPAA certification", "summary": "New security compliance portal launched for healthcare customers.", "competitor_name": "Rival Alpha", "impact_score": 70}
-        ]
-        
-    return TopicClusteringEngine.cluster_intelligence_documents(docs, num_clusters=num_clusters)
+    category_map = {
+        "FEATURE_LAUNCH": ("Product & AI Innovation", ["feature", "launch", "ai", "product"]),
+        "PRICING_CHANGE": ("Pricing & Monetization Moves", ["pricing", "tier", "plan", "cost"]),
+        "EXPANSION": ("GTM & Market Expansion", ["expansion", "partner", "market", "sales"]),
+        "PARTNERSHIP": ("Strategic Partnerships", ["partner", "ecosystem", "integration"]),
+        "LEADERSHIP": ("Leadership & Organization", ["executive", "hire", "team", "growth"]),
+        "OTHER": ("Market Positioning", ["strategy", "positioning", "brand"])
+    }
+
+    cat_counts = {}
+    total_docs = len(docs) or 1
+    for d in docs:
+        etype = d.get("event_type") or "FEATURE_LAUNCH"
+        cat_info = category_map.get(etype, ("Product & AI Innovation", ["feature", "product"]))
+        cat_name = cat_info[0]
+        cat_counts.setdefault(cat_name, {"count": 0, "keywords": cat_info[1]})["count"] += 1
+
+    clusters = []
+    cluster_id = 0
+    for theme_name, info in sorted(cat_counts.items(), key=lambda x: x[1]["count"], reverse=True)[:num_clusters]:
+        pct = round((info["count"] / max(total_docs, 1)) * 100.0, 1)
+        clusters.append({
+            "clusterId": cluster_id,
+            "theme": theme_name,
+            "topKeyphrases": info["keywords"],
+            "documentCount": info["count"],
+            "categorySharePct": pct
+        })
+        cluster_id += 1
+
+    return {
+        "totalDocumentsClustered": len(docs),
+        "kClusters": len(clusters),
+        "dominantTheme": clusters[0]["theme"] if clusters else "Product & AI Innovation",
+        "clusters": clusters
+    }
 
 
 @app.post("/api/ml/semantic-similarity")
@@ -1002,11 +1032,15 @@ async def compute_semantic_similarity_endpoint(
     payload: SemanticSimilarityPayload,
     user_id: str = Depends(get_current_user)
 ):
-    """Compute semantic relevance using Hugging Face (sentence-transformers/all-MiniLM-L6-v2) or local vector space."""
-    return await HuggingFaceService.compute_semantic_relevance(
-        source_text=payload.source_text,
-        candidate_texts=payload.candidate_texts
-    )
+    """Compute semantic relevance using direct token overlap matching."""
+    source_words = set(payload.source_text.lower().split())
+    scores = []
+    for candidate in payload.candidate_texts:
+        candidate_words = set(candidate.lower().split())
+        overlap = len(source_words.intersection(candidate_words))
+        score = round(overlap / max(len(source_words), 1), 3)
+        scores.append(min(1.0, score))
+    return {"source": payload.source_text, "scores": scores}
 
 
 @app.post("/api/ml/business-sentiment")
@@ -1014,8 +1048,26 @@ async def analyze_business_sentiment_endpoint(
     payload: BusinessSentimentPayload,
     user_id: str = Depends(get_current_user)
 ):
-    """Analyze corporate & financial sentiment using Hugging Face (ProsusAI/finbert) or heuristic fallback."""
-    return await HuggingFaceService.analyze_business_sentiment(text=payload.text)
+    """Analyze corporate sentiment using keyword heuristics."""
+    text_lower = payload.text.lower()
+    pos_words = ["surge", "growth", "profit", "expansion", "leading", "boost", "strong", "accelerate", "win"]
+    neg_words = ["drop", "loss", "decline", "churn", "cut", "weak", "fail", "delay", "risk", "lawsuit"]
+    
+    pos_count = sum(1 for w in pos_words if w in text_lower)
+    neg_count = sum(1 for w in neg_words if w in text_lower)
+    
+    score = 0.0
+    if pos_count > neg_count:
+        label = "POSITIVE"
+        score = min(0.9, 0.4 + (pos_count * 0.1))
+    elif neg_count > pos_count:
+        label = "NEGATIVE"
+        score = max(-0.9, -0.4 - (neg_count * 0.1))
+    else:
+        label = "NEUTRAL"
+        score = 0.0
+        
+    return {"label": label, "score": score, "text": payload.text[:100]}
 
 
 @app.post("/api/actions/playbook")
@@ -1472,26 +1524,38 @@ async def get_intelligence_trends(user_id: str = Depends(get_current_user)):
         comp_res = supabase_client.table("competitors").select("id, name, type").eq("company_id", company_id).execute()
         comp_map = {str(c["id"]): c["name"] for c in (comp_res.data or [])}
 
-        # 1. Unsupervised Machine Learning Topic Clustering across all intelligence documents
-        clustering_input = []
+        # 1. Macro Market Category Attention (Aggregated directly from verified intelligence events)
+        category_map = {
+            "FEATURE_LAUNCH": ("Product & AI Innovation", ["feature", "launch", "ai", "product"]),
+            "PRICING_CHANGE": ("Pricing & Monetization Moves", ["pricing", "tier", "plan", "cost"]),
+            "EXPANSION": ("GTM & Market Expansion", ["expansion", "partner", "market", "sales"]),
+            "PARTNERSHIP": ("Strategic Partnerships", ["partner", "ecosystem", "integration"]),
+            "LEADERSHIP": ("Leadership & Organization", ["executive", "hire", "team", "growth"]),
+            "OTHER": ("Market Positioning", ["strategy", "positioning", "brand"])
+        }
+
+        cat_counts = {}
+        total_docs = len(docs)
         for d in docs:
-            cid = str(d.get("competitor_id", ""))
-            clustering_input.append({
-                "title": d.get("title", ""),
-                "summary": d.get("summary", ""),
-                "competitor_name": comp_map.get(cid, "Competitor"),
-                "impact_score": d.get("impact_score", 50)
+            etype = d.get("event_type") or "FEATURE_LAUNCH"
+            cat_info = category_map.get(etype, ("Product & AI Innovation", ["feature", "product"]))
+            cat_name = cat_info[0]
+            cat_counts.setdefault(cat_name, {"count": 0, "keywords": cat_info[1]})["count"] += 1
+
+        macro_clusters = []
+        cluster_id = 0
+        for theme_name, info in sorted(cat_counts.items(), key=lambda x: x[1]["count"], reverse=True)[:3]:
+            pct = round((info["count"] / max(total_docs, 1)) * 100.0, 1)
+            macro_clusters.append({
+                "clusterId": cluster_id,
+                "theme": theme_name,
+                "topKeyphrases": info["keywords"],
+                "documentCount": info["count"],
+                "categorySharePct": pct
             })
+            cluster_id += 1
 
-        clustering_result = {}
-        if len(clustering_input) >= 3:
-            try:
-                clustering_result = TopicClusteringEngine.cluster_intelligence_documents(clustering_input, num_clusters=3)
-            except Exception as cluster_err:
-                logger.warning("Clustering error in trends: %s", cluster_err)
-
-        macro_clusters = clustering_result.get("clusters", [])
-        dominant_theme = clustering_result.get("dominantTheme", "Product & AI Innovation")
+        dominant_theme = macro_clusters[0]["theme"] if macro_clusters else "Product & AI Innovation"
 
         # 2. Group documents by competitor and compute signal momentum & baseline
         by_comp = {}

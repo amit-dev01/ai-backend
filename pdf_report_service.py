@@ -34,7 +34,6 @@ from positioning_engine import PositioningEngine
 from pricing_matrix_service import PricingMatrixService
 from win_loss_service import WinLossService
 from share_of_voice_service import ShareOfVoiceService
-from ml_topic_clustering import TopicClusteringEngine
 
 logger = logging.getLogger(__name__)
 
