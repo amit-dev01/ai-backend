@@ -146,19 +146,28 @@ async def save_competitor_and_report(
 
 def get_company_profile(user_id: str) -> Optional[Dict[str, Any]]:
     """Fetch the company profile for the authenticated user."""
-    if not supabase_client:
+    if not supabase_client or not user_id:
         return None
         
     try:
-        response = (
-            supabase_client.table("companies")
-            .select("*")
-            .eq("owner_id", user_id)
-            .limit(1)
-            .execute()
-        )
-        if response and response.data:
-            return response.data[0]
+        import uuid
+        is_valid_uuid = False
+        try:
+            uuid.UUID(str(user_id))
+            is_valid_uuid = True
+        except (ValueError, TypeError):
+            is_valid_uuid = False
+
+        if is_valid_uuid:
+            response = (
+                supabase_client.table("companies")
+                .select("*")
+                .eq("owner_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if response and response.data:
+                return response.data[0]
             
         # Fallback: if user has no company created under their exact owner_id, use first company
         fallback_res = supabase_client.table("companies").select("*").limit(1).execute()
@@ -168,7 +177,7 @@ def get_company_profile(user_id: str) -> Optional[Dict[str, Any]]:
             
         return None
     except Exception as exc:
-        logger.exception("Failed to fetch company profile: %s", str(exc))
+        logger.warning("Could not retrieve company profile for user %s: %s", user_id, str(exc))
         return None
 
 

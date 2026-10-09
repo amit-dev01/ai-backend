@@ -97,7 +97,7 @@ from database import (
     get_task_by_id,
     get_task_stats,
 )
-from auth import get_current_user
+from auth import get_current_user, get_optional_user
 from discovery_service import run_competitor_discovery
 from competitor_monitoring_service import CompetitorMonitoringService
 from manual_monitoring import run_manual_monitoring_job
@@ -117,6 +117,7 @@ from action_dispatch_service import ActionDispatchService
 from conversational_agent_service import ConversationalAgentService
 from battle_simulator_service import BattleSimulatorService
 from web_presence_service import WebPresenceService
+from visual_diff_service import VisualDiffService
 from models import (
     DealOutcomePayload,
     SemanticSimilarityPayload,
@@ -777,6 +778,25 @@ async def get_side_by_side_comparison(
         },
         "competitors": comparison_data
     }
+
+
+@app.get("/api/competitors/{competitor_id}/visual-diff")
+async def get_competitor_visual_diff_endpoint(
+    competitor_id: str,
+    user_id: Optional[str] = Depends(get_optional_user)
+):
+    """Retrieve historical before vs after visual diff with strategic bounding boxes."""
+    return await VisualDiffService.get_visual_diff_for_competitor(competitor_id)
+
+
+@app.get("/api/competitors/product-matrix")
+async def get_product_portfolio_matrix_endpoint(
+    user_id: Optional[str] = Depends(get_optional_user)
+):
+    """Retrieve product-by-product visual comparison matrix with flagship, minima, median, and maxima."""
+    company = get_company_profile(user_id) if user_id else None
+    company_id = str(company.get("id", "")) if company else ""
+    return VisualDiffService.get_product_portfolio_matrix(company_id)
 
 
 @app.get("/api/competitors/{competitor_id}/signals")
