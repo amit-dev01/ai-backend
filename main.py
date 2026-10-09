@@ -114,6 +114,8 @@ from pdf_report_service import PDFReportService
 from share_of_voice_service import ShareOfVoiceService
 from github_monitoring_service import GitHubMonitoringService
 from action_dispatch_service import ActionDispatchService
+from conversational_agent_service import ConversationalAgentService
+from battle_simulator_service import BattleSimulatorService
 from models import (
     DealOutcomePayload,
     SemanticSimilarityPayload,
@@ -121,6 +123,10 @@ from models import (
     PlaybookRequestPayload,
     JiraCreatePayload,
     WhatsAppAlertPayload,
+    ChatPayload,
+    ChatResponse,
+    BattleSimulatePayload,
+    BattleSimulationResponse,
 )
 
 
@@ -1455,6 +1461,49 @@ async def get_intelligence_summary_endpoint(
         competitiveVelocity=_safe_list(company.get("competitive_velocity")),
         generatedAt=company.get("weekly_brief_generated_at"),
     )
+
+
+@app.post("/api/intelligence/chat", response_model=ChatResponse)
+async def chat_with_intelligence_agent(
+    payload: ChatPayload,
+    user_id: str = Depends(get_current_user)
+) -> ChatResponse:
+    """Conversational Competitive Intelligence Agent - chat with your live market data."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+
+    company_id = str(company.get("id", ""))
+    history_dicts = [{"role": m.role, "content": m.content} for m in payload.history]
+
+    res = await ConversationalAgentService.chat(
+        company_id=company_id,
+        message=payload.message,
+        history=history_dicts,
+        competitor_id=payload.competitorId
+    )
+    return ChatResponse(**res)
+
+
+@app.post("/api/intelligence/battle-simulate", response_model=BattleSimulationResponse)
+async def run_battle_simulation(
+    payload: BattleSimulatePayload,
+    user_id: str = Depends(get_current_user)
+) -> BattleSimulationResponse:
+    """AI Battle Simulator - simulate what-if scenarios and game-theoretic countermeasures."""
+    company = get_company_profile(user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company profile not found.")
+
+    company_id = str(company.get("id", ""))
+    res = await BattleSimulatorService.simulate(
+        company_id=company_id,
+        competitor_id=payload.competitorId,
+        scenario_type=payload.scenarioType,
+        custom_scenario=payload.customScenario,
+        target_segment=payload.targetSegment or "Mid-Market & Enterprise"
+    )
+    return BattleSimulationResponse(**res)
 
 
 @app.get("/api/intelligence/competitor-stats", response_model=IntelligenceStatsResponse)

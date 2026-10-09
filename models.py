@@ -478,3 +478,44 @@ class WhatsAppAlertPayload(BaseModel):
     recipient_phone: str = Field(..., description="Recipient phone number with country code, e.g. '+1234567890'")
     alert_text: str = Field(..., description="Formatted alert message to send to the team")
     custom_webhook_url: Optional[str] = Field(None, description="Optional custom webhook URL (Zapier/Make/Slack/Telegram)")
+
+
+# ---------------------------------------------------------------------------
+# Conversational AI Agent & Battle Simulator Models
+# ---------------------------------------------------------------------------
+
+class ChatMessage(BaseModel):
+    role: str = Field(..., description="'user' or 'agent'")
+    content: str = Field(..., description="Message text")
+
+
+class ChatPayload(BaseModel):
+    message: str = Field(..., description="User question or prompt")
+    history: Optional[list[ChatMessage]] = Field(default=[], description="Prior conversation messages")
+    competitorId: Optional[str] = Field(default=None, description="Optional specific competitor to focus on")
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    suggestedFollowUps: list[str] = []
+    referencedCompetitors: list[str] = []
+
+
+class BattleSimulatePayload(BaseModel):
+    competitorId: str = Field(..., description="Competitor UUID to simulate against")
+    scenarioType: str = Field(..., description="PRICE_DROP_20, AI_COPILOT, ENTERPRISE_DISCOUNT, AGGRESSIVE_BUNDLING, OPEN_SOURCE_CORE, CUSTOM")
+    customScenario: Optional[str] = Field(None, description="Custom scenario description if scenarioType is CUSTOM")
+    targetSegment: Optional[str] = Field("Mid-Market & Enterprise", description="Target customer segment")
+
+
+class BattleSimulationResponse(BaseModel):
+    competitorName: str
+    scenarioTitle: str
+    riskLevel: str  # CRITICAL, HIGH, MODERATE
+    riskScore: int  # 1 to 100
+    projectedMarketShareImpact: str
+    competitorVulnerability: str
+    immediateCounterMeasure: str
+    midTermMoatStrategy: str
+    salesRepPlaybook: str
+    timelineForecast: list[dict[str, Any]]

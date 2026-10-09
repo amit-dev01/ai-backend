@@ -195,6 +195,11 @@ async def _search_serper(query: str, num_results: int = 10) -> list[dict]:
     return results
 
 
+async def search_serper_organic(query: str, num_results: int = 10) -> list[dict]:
+    """Public wrapper to query Google organic search via Serper."""
+    return await _search_serper(query, num_results=num_results)
+
+
 async def _search_serper_news(query: str, num_results: int = 10) -> list[dict]:
     """Call Serper Google News endpoint for fresh news articles.
 
