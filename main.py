@@ -1010,10 +1010,17 @@ async def get_competitor_community_signals_endpoint(
         raise HTTPException(status_code=404, detail="Company not found.")
     
     comp = get_competitor_by_id(competitor_id)
-    if not comp:
-        raise HTTPException(status_code=404, detail="Competitor not found.")
+    if comp:
+        comp_name = comp.get("name") or comp.get("company_name") or "Competitor"
+    else:
+        company_id = str(company.get("id", ""))
+        all_comps = get_competitors_for_company(company_id) if company_id else []
+        matched = next((c for c in all_comps if str(c.get("id")) == competitor_id or c.get("name", "").lower() == competitor_id.lower()), None)
+        if matched:
+            comp_name = matched.get("name") or matched.get("company_name") or competitor_id
+        else:
+            comp_name = competitor_id.replace("comp-", "").capitalize()
     
-    comp_name = comp.get("name", "Competitor")
     return await CommunitySignalsService.get_community_voice(comp_name)
 
 
