@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from database import supabase_client, get_competitor_by_id, get_company_profile_by_id
+from database import supabase_client, get_competitor_by_id, get_company_profile_by_id, is_valid_uuid
 from nlp_portfolio_engine import extract_flagship_and_boundaries
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ class SnapshotService:
         }
 
         # 1. Try Supabase
-        if supabase_client:
+        if supabase_client and is_valid_uuid(competitor_id):
             try:
                 supabase_client.table("competitor_snapshots").upsert(snapshot_record).execute()
             except Exception as exc:
@@ -106,7 +106,7 @@ class SnapshotService:
     def get_snapshots_for_competitor(competitor_id: str) -> list[dict[str, Any]]:
         """Fetch all chronological snapshots for a competitor."""
         # Check Supabase first
-        if supabase_client:
+        if supabase_client and is_valid_uuid(competitor_id):
             try:
                 res = (
                     supabase_client.table("competitor_snapshots")

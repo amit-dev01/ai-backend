@@ -96,12 +96,14 @@ class PricingMatrixService:
 
             matrix_rows.append({
                 "competitorId": comp_id,
+                "competitorName": comp_name,
                 "name": comp_name,
                 "website": comp_url,
                 "flagshipProduct": flagship,
                 "priceMinima": p_min,
                 "priceMaxima": p_max,
                 "priceMedian": p_med,
+                "competitiveScore": comp.get("competitive_score", 65),
                 "tiers": tiers,
                 "whitespace": whitespace,
                 "positioningTier": (
@@ -126,6 +128,8 @@ class PricingMatrixService:
                 category_whitespace.append({
                     "fromPrice": combined_tiers[i],
                     "toPrice": combined_tiers[i+1],
+                    "rangeFrom": combined_tiers[i],
+                    "rangeTo": combined_tiers[i+1],
                     "gapSize": gap,
                     "description": f"Unoccupied market gap between ${combined_tiers[i]:.0f} and ${combined_tiers[i+1]:.0f}/mo."
                 })
@@ -141,17 +145,30 @@ class PricingMatrixService:
         else:
             strategic_recommendation = "Establish a clear 3-tier pricing model (Starter, Professional, Enterprise) to anchor market value."
 
+        cat_stats = {
+            "priceFloorMinima": cat_floor if cat_floor is not None else 0.0,
+            "priceCeilingMaxima": cat_ceiling if cat_ceiling is not None else 0.0,
+            "enterpriseCeilingMaxima": cat_ceiling if cat_ceiling is not None else 0.0,
+            "categoryMedianPrice": cat_median if cat_median is not None else 0.0,
+            "totalCompetitorsAnalyzed": len(matrix_rows)
+        }
+
         return {
             "companyId": company_id,
             "companyName": our_name,
             "industry": our_industry,
+            "category": our_industry,
             "totalCompetitorsAnalyzed": len(matrix_rows),
+            "categoryStats": cat_stats,
             "categoryBenchmarks": {
                 "marketFloorMinima": cat_floor,
                 "marketCeilingMaxima": cat_ceiling,
                 "categoryMedian": cat_median,
             },
+            "matrix": matrix_rows,
+            "competitorMatrix": matrix_rows,
+            "whitespaceGaps": category_whitespace,
             "unoccupiedWhitespaceGaps": category_whitespace,
-            "strategicRecommendation": strategic_recommendation,
-            "competitorMatrix": matrix_rows
+            "pricingRecommendations": [strategic_recommendation] if strategic_recommendation else [],
+            "strategicRecommendation": strategic_recommendation
         }

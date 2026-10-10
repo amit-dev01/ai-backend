@@ -7,6 +7,7 @@ Manages storing competitors and analysis reports into Supabase tables:
 """
 
 import logging
+import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from supabase import create_client, Client
@@ -15,6 +16,17 @@ from config import SUPABASE_URL, SUPABASE_KEY
 logger = logging.getLogger(__name__)
 
 supabase_client: Optional[Client] = None
+
+
+def is_valid_uuid(val: Any) -> bool:
+    """Check if value is a valid UUID string."""
+    if not val or not isinstance(val, str):
+        return False
+    try:
+        uuid.UUID(str(val))
+        return True
+    except (ValueError, AttributeError):
+        return False
 
 if SUPABASE_URL and SUPABASE_KEY:
     try:
@@ -183,7 +195,7 @@ def get_company_profile(user_id: str) -> Optional[Dict[str, Any]]:
 
 def get_company_profile_by_id(company_id: str) -> Optional[Dict[str, Any]]:
     """Fetch the company profile by company UUID."""
-    if not supabase_client:
+    if not supabase_client or not company_id or not is_valid_uuid(company_id):
         return None
 
     try:
@@ -431,7 +443,7 @@ def get_competitors_for_company(
         query = supabase_client.table("competitors").select("*").eq("company_id", company_id)
 
         if status == "active":
-            query = query.eq("is_active", True)
+            query = query.or_("is_active.eq.true,is_active.is.null")
         elif status == "archived":
             query = query.eq("is_active", False)
 
@@ -465,7 +477,7 @@ def get_competitor_by_id(competitor_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Competitor dict or None.
     """
-    if not supabase_client:
+    if not supabase_client or not competitor_id or not is_valid_uuid(competitor_id):
         return None
 
     try:
@@ -1216,6 +1228,14 @@ def create_task(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         # Protect against varchar(80) overflow on title column in database
         if "title" in payload and payload["title"]:
             payload["title"] = str(payload["title"])[:80]
+        # Validate UUID columns
+        if "competitor_id" in payload and payload["competitor_id"]:
+            if not is_valid_uuid(payload["competitor_id"]):
+                payload["competitor_id"] = None
+        if "company_id" in payload and payload["company_id"]:
+            if not is_valid_uuid(payload["company_id"]):
+                logger.warning("Invalid company_id UUID for task creation: %s", payload["company_id"])
+                return None
         res = supabase_client.table("tasks").insert(payload).execute()
         return res.data[0] if res and res.data else None
     except Exception as exc:

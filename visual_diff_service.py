@@ -19,7 +19,7 @@ import logging
 from typing import Any, Optional
 import httpx
 
-from database import get_competitor_by_id, get_company_profile_by_id
+from database import get_competitor_by_id, get_company_profile_by_id, get_competitors_for_company
 
 logger = logging.getLogger(__name__)
 
@@ -316,17 +316,49 @@ class VisualDiffService:
         home_prod["name"] = home_name
         home_prod["productCategory"] = home_industry
 
-        competitors = [
-            PRODUCT_CATALOG["comp-linear"],
-            PRODUCT_CATALOG["comp-jira"],
-            PRODUCT_CATALOG["comp-asana"],
-            PRODUCT_CATALOG["comp-clickup"]
-        ]
+        real_comps = get_competitors_for_company(company_id) if company_id else []
+        if real_comps:
+            competitors = []
+            for c in real_comps[:6]:
+                cid = str(c.get("id"))
+                cname = c.get("name", "Competitor")
+                cweb = c.get("website_url") or c.get("website") or ""
+                cdesc = c.get("description") or f"Direct competitor in {home_industry}."
+                cscore = c.get("competitive_score", 65) or 65
+                ctype = c.get("type", "DIRECT")
+                v_visual = f"https://api.microlink.io?url={cweb}&screenshot=true&meta=false&embed=screenshot.url" if cweb else "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80"
+                competitors.append({
+                    "id": cid,
+                    "name": cname,
+                    "productCategory": f"{ctype} · {home_industry}",
+                    "productVisual": v_visual,
+                    "flagshipProduct": f"{cname} Core Platform",
+                    "targetUser": f"Customers & teams evaluating {cname}",
+                    "keyDifferentiator": cdesc[:140],
+                    "pricingFloor": 8.0,
+                    "pricingMedian": 16.0,
+                    "pricingCeiling": 35.0,
+                    "pricingModel": "Per-Seat Monthly (Tiered)",
+                    "specs": [
+                        {"label": "Flagship Offering", "value": f"{cname} Platform"},
+                        {"label": "Threat Score", "value": f"{cscore}/100"},
+                        {"label": "Website", "value": cweb or "Web SaaS"},
+                        {"label": "Classification", "value": f"{ctype} Competitor"},
+                        {"label": "Intelligence Coverage", "value": "Continuous Stream"}
+                    ]
+                })
+        else:
+            competitors = [
+                PRODUCT_CATALOG["comp-linear"],
+                PRODUCT_CATALOG["comp-jira"],
+                PRODUCT_CATALOG["comp-asana"],
+                PRODUCT_CATALOG["comp-clickup"]
+            ]
 
         # Calculate category mathematical metrics
-        all_floors = [p["pricingFloor"] for p in competitors if p["pricingFloor"] > 0]
-        all_medians = [p["pricingMedian"] for p in competitors if p["pricingMedian"] > 0]
-        all_ceilings = [p["pricingCeiling"] for p in competitors if p["pricingCeiling"] > 0]
+        all_floors = [p["pricingFloor"] for p in competitors if p.get("pricingFloor", 0) > 0]
+        all_medians = [p["pricingMedian"] for p in competitors if p.get("pricingMedian", 0) > 0]
+        all_ceilings = [p["pricingCeiling"] for p in competitors if p.get("pricingCeiling", 0) > 0]
 
         category_stats = {
             "categoryName": home_industry,

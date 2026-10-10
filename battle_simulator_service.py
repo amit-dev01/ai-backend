@@ -94,7 +94,7 @@ Perform a rigorous strategic simulation and return ONLY valid JSON matching this
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0.2,
-                max_tokens=900,
+                max_tokens=650,
             )
             raw = response.choices[0].message.content or "{}"
             data = json.loads(raw)

@@ -13,12 +13,13 @@ Produces an actionable 1-page sales weapon for go-to-market teams.
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from openai import AsyncOpenAI
 
 from config import GROQ_API_KEY, GROQ_BASE_URL, EXTRACTION_MODEL, LLM_MODEL
-from database import get_company_profile_by_id, get_competitor_by_id, supabase_client
+from database import get_company_profile_by_id, get_competitor_by_id, supabase_client, is_valid_uuid
 from nlp_portfolio_engine import extract_flagship_and_boundaries
 from signal_analyzer import analyze_competitor_signal
 
@@ -67,7 +68,7 @@ class BattlecardService:
 
         # 1. Fetch recent intelligence documents for this competitor
         recent_docs = []
-        if supabase_client:
+        if supabase_client and is_valid_uuid(competitor_id):
             try:
                 res = (
                     supabase_client.table("intelligence_documents")
@@ -175,6 +176,7 @@ Return only valid JSON, no markdown code blocks, no preamble."""
                 model=LLM_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
+                max_tokens=700,
                 response_format={"type": "json_object"}
             )
             raw = res.choices[0].message.content or "{}"
@@ -222,7 +224,9 @@ Return only valid JSON, no markdown code blocks, no preamble."""
                 "whiteSpace": white_space
             },
             "momentumStatus": signal_data.get("currentStatus"),
-            "generatedAt": "2026-09-03T22:50:00Z"
+            "stealthAlert": signal_data.get("stealthAlert", False),
+            "anomalySeverity": signal_data.get("anomalySeverity", 0.0),
+            "generatedAt": datetime.now(timezone.utc).isoformat()
         }
 
         return battlecard_data

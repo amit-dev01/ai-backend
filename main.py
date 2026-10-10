@@ -195,6 +195,8 @@ _active_background_tasks = set()
 # Routes
 # ---------------------------------------------------------------------------
 @app.get("/")
+@app.get("/health")
+@app.get("/api/health")
 async def health_check() -> dict:
     """Health-check endpoint returning service status."""
     return {"status": "ok", "service": "competitor-analysis-ai"}
@@ -360,6 +362,7 @@ async def update_company_profile(
 # ---------------------------------------------------------------------------
 
 @app.get("/api/company/setup-status", response_model=SetupStatusResponse)
+@app.get("/api/setup-status", response_model=SetupStatusResponse)
 async def get_setup_status(user_id: str = Depends(get_current_user)) -> SetupStatusResponse:
     """Return discovery job progress status for the user's company."""
     company = get_company_profile(user_id)
@@ -970,6 +973,32 @@ async def get_deal_analytics_endpoint(
     return WinLossService.get_deal_analytics(company_id)
 
 
+@app.get("/api/deals/predict")
+async def predict_deal_odds_endpoint(
+    competitor_name: str,
+    deal_size: float = 35000.0,
+    sales_cycle_days: int = 30,
+    client_size: str = "Mid-Market",
+    user_id: str = Depends(get_current_user)
+):
+    """Predict deal win probability against a specific rival using trained XGBoost model."""
+    try:
+        from ci_model_suite import CIModelSuite
+        return CIModelSuite.predict_deal_odds(
+            deal_size=deal_size,
+            competitor=competitor_name,
+            days=sales_cycle_days,
+            client_size=client_size
+        )
+    except Exception as exc:
+        logger.warning("ML prediction failed: %s", exc)
+        return {
+            "winProbability": 52.0,
+            "status": "FAVORABLE",
+            "fallback": True
+        }
+
+
 @app.get("/api/competitors/{competitor_id}/community-signals")
 async def get_competitor_community_signals_endpoint(
     competitor_id: str,
@@ -1532,6 +1561,7 @@ async def get_intelligence_feed_endpoint(
 
 
 @app.get("/api/intelligence/strategy-brief", response_model=IntelligenceSummaryResponse)
+@app.get("/api/intelligence/summary", response_model=IntelligenceSummaryResponse)
 async def get_intelligence_summary_endpoint(
     user_id: str = Depends(get_current_user)
 ) -> IntelligenceSummaryResponse:
@@ -1609,6 +1639,7 @@ async def run_battle_simulation(
 
 
 @app.get("/api/intelligence/competitor-stats", response_model=IntelligenceStatsResponse)
+@app.get("/api/intelligence/stats", response_model=IntelligenceStatsResponse)
 async def get_intelligence_stats_endpoint(
     user_id: str = Depends(get_current_user)
 ) -> IntelligenceStatsResponse:

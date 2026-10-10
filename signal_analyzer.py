@@ -124,6 +124,25 @@ def analyze_competitor_signal(
         current_status = "NORMAL_BASELINE"
         summary_desc = f"{competitor_name} is operating at standard baseline velocity."
 
+    # 6. Isolation Forest Stealth Move Detection (Trained on real NAB Telemetry)
+    stealth_alert = False
+    anomaly_severity = 0.0
+    try:
+        from ci_model_suite import CIModelSuite
+        diffs = np.gradient(signal)
+        rate_of_change = float(diffs[-1]) if len(diffs) > 0 else 0.0
+        latest_val = float(signal[-1])
+        iso_res = CIModelSuite.detect_stealth_anomaly(
+            metric_val=latest_val,
+            rolling_mean=mean_val,
+            rolling_std=std_val,
+            rate_of_change=rate_of_change
+        )
+        stealth_alert = iso_res.get("isStealthAlert", False)
+        anomaly_severity = iso_res.get("severityScore", 0.0)
+    except Exception as exc:
+        logger.debug("Isolation Forest detection bypassed: %s", exc)
+
     return {
         "maxima": maxima_events,
         "minima": minima_events,
@@ -132,5 +151,7 @@ def analyze_competitor_signal(
         "meanVolume": round(mean_val, 1),
         "momentum": momentum,
         "currentStatus": current_status,
+        "stealthAlert": stealth_alert,
+        "anomalySeverity": anomaly_severity,
         "summary": summary_desc,
     }

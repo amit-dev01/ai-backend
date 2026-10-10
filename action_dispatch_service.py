@@ -111,7 +111,7 @@ Produce this exact JSON structure with concrete, actionable text (no vague place
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
-                max_tokens=1500,
+                max_tokens=800,
                 response_format={"type": "json_object"}
             )
             playbook = json.loads(resp.choices[0].message.content or "{}")

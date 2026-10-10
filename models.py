@@ -318,7 +318,7 @@ class MonitoringJobOut(BaseModel):
     jobType: str
     status: str
     progress: int = 0
-    currentStep: str = ""
+    currentStep: Optional[str] = None
     documentsFound: int
     documentsProcessed: int
     startedAt: Optional[str] = None
@@ -336,7 +336,7 @@ class CheckStatusResponse(BaseModel):
     jobId: Optional[str]
     status: str
     progress: int
-    currentStep: str
+    currentStep: Optional[str] = None
     documentsFound: int
     documentsProcessed: int
     startedAt: Optional[str] = None
