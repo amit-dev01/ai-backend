@@ -138,5 +138,19 @@
     "event_count": 0,
     "sentiment_score": 0.0,
     "recorded_at": "2026-10-02T18:14:15.144808"
+  },
+  {
+    "id": "b8867623-541c-46a8-a1fc-e61bf019c666_2026-10-11",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "b8867623-541c-46a8-a1fc-e61bf019c666",
+    "snapshot_date": "2026-10-11",
+    "flagship_product": "Jis College",
+    "price_minima": null,
+    "price_maxima": null,
+    "price_median": null,
+    "pricing_tiers": [],
+    "event_count": 0,
+    "sentiment_score": 0.0,
+    "recorded_at": "2026-10-11T06:10:41.673904"
   }
 ]
