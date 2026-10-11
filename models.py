@@ -267,10 +267,13 @@ class IntelligenceSummaryResponse(BaseModel):
     watchList: list[Any] = []
     strategicRecommendations: list[Any] = []  # list[dict] with priority/rationale/owner
     competitiveVelocity: list[Any] = []       # list[dict] with competitor/eventCount/trend
+    criticalAlerts: list[Any] = []
+    trendSummary: Optional[str] = None
+    anomalySummary: Optional[str] = None
     generatedAt: Optional[str] = None
 
     @field_validator(
-        "topThreats", "opportunities", "watchList", "strategicRecommendations", "competitiveVelocity",
+        "topThreats", "opportunities", "watchList", "strategicRecommendations", "competitiveVelocity", "criticalAlerts",
         mode="before"
     )
     @classmethod
