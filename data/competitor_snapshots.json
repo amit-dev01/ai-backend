@@ -4,153 +4,345 @@
     "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
     "competitor_id": "7ca32a3c-23ea-4a87-9ac3-4b58198f42ad",
     "snapshot_date": "2026-10-02",
-    "flagship_product": "Sociano Keeps Dms",
-    "price_minima": null,
-    "price_maxima": null,
-    "price_median": null,
-    "pricing_tiers": [],
+    "flagship_product": "Sociano Ad-Free Pass",
+    "price_minima": 3.33,
+    "price_maxima": 39.99,
+    "price_median": 39.99,
+    "pricing_tiers": [
+      "$33/mo (Billed Annually)",
+      "$99/yr (Full Pass)"
+    ],
     "event_count": 0,
     "sentiment_score": 0.0,
-    "recorded_at": "2026-10-02T18:14:10.637568"
+    "recorded_at": "2026-10-11T06:42:45.521903"
   },
   {
     "id": "ae5d7974-6902-4da3-8677-616aa1904fe5_2026-10-02",
     "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
     "competitor_id": "ae5d7974-6902-4da3-8677-616aa1904fe5",
     "snapshot_date": "2026-10-02",
-    "flagship_product": "Social Media Ecosystem",
-    "price_minima": null,
-    "price_maxima": null,
-    "price_median": null,
-    "pricing_tiers": [],
+    "flagship_product": "Mosaic Open Ecosystem",
+    "price_minima": 0.0,
+    "price_maxima": 0.0,
+    "price_median": 0.0,
+    "pricing_tiers": [
+      "$ (Free & Open Source / Public Good)"
+    ],
     "event_count": 0,
     "sentiment_score": 0.0,
-    "recorded_at": "2026-10-02T18:14:11.165827"
+    "recorded_at": "2026-10-11T06:42:45.521945"
   },
   {
     "id": "ea1578b9-2a17-406d-a2b7-8669692664b5_2026-10-02",
     "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
     "competitor_id": "ea1578b9-2a17-406d-a2b7-8669692664b5",
     "snapshot_date": "2026-10-02",
-    "flagship_product": "Social Enterprise Alternative",
-    "price_minima": null,
-    "price_maxima": null,
-    "price_median": null,
-    "pricing_tiers": [],
+    "flagship_product": "AltSocial Enterprise Alternative",
+    "price_minima": 0.0,
+    "price_maxima": 25.0,
+    "price_median": 12.5,
+    "pricing_tiers": [
+      "$ (Free Member)",
+      "$/mo (Supporter)"
+    ],
     "event_count": 0,
     "sentiment_score": 0.0,
-    "recorded_at": "2026-10-02T18:14:11.656566"
+    "recorded_at": "2026-10-11T06:42:45.521954"
   },
   {
     "id": "9bcdc88f-d44a-452c-90fa-4c3f78b31f85_2026-10-02",
     "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
     "competitor_id": "9bcdc88f-d44a-452c-90fa-4c3f78b31f85",
     "snapshot_date": "2026-10-02",
-    "flagship_product": "Support Growth",
-    "price_minima": null,
-    "price_maxima": null,
-    "price_median": null,
-    "pricing_tiers": [],
+    "flagship_product": "Communities Cooperative",
+    "price_minima": 0.0,
+    "price_maxima": 0.0,
+    "price_median": 0.0,
+    "pricing_tiers": [
+      " (Member-Owned Cooperative)"
+    ],
     "event_count": 0,
     "sentiment_score": 0.0,
-    "recorded_at": "2026-10-02T18:14:12.165325"
+    "recorded_at": "2026-10-11T06:42:45.521960"
   },
   {
     "id": "a48f1143-9d76-4a5a-895a-71e96f3245f5_2026-10-02",
     "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
     "competitor_id": "a48f1143-9d76-4a5a-895a-71e96f3245f5",
     "snapshot_date": "2026-10-02",
-    "flagship_product": "Gnu Social",
-    "price_minima": null,
-    "price_maxima": null,
-    "price_median": null,
-    "pricing_tiers": [],
+    "flagship_product": "GNU Social Platform",
+    "price_minima": 0.0,
+    "price_maxima": 0.0,
+    "price_median": 0.0,
+    "pricing_tiers": [
+      "$ (Free Software GPL)"
+    ],
     "event_count": 0,
     "sentiment_score": 0.0,
-    "recorded_at": "2026-10-02T18:14:12.654923"
+    "recorded_at": "2026-10-11T06:42:45.521965"
   },
   {
     "id": "54f76ea1-2c0d-4d4c-bf7a-7f59e8fe3566_2026-10-02",
     "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
     "competitor_id": "54f76ea1-2c0d-4d4c-bf7a-7f59e8fe3566",
     "snapshot_date": "2026-10-02",
-    "flagship_product": "Stays Way",
-    "price_minima": null,
-    "price_maxima": null,
-    "price_median": null,
-    "pricing_tiers": [],
+    "flagship_product": "Socia Organisations",
+    "price_minima": 0.0,
+    "price_maxima": 15.0,
+    "price_median": 15.0,
+    "pricing_tiers": [
+      "$ (Personal Account)",
+      "$/mo (Organisation Page)"
+    ],
     "event_count": 0,
     "sentiment_score": 0.0,
-    "recorded_at": "2026-10-02T18:14:13.132448"
+    "recorded_at": "2026-10-11T06:42:45.521970"
   },
   {
     "id": "46f4574f-7edf-4505-bff4-d1aaf1ca844e_2026-10-02",
     "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
     "competitor_id": "46f4574f-7edf-4505-bff4-d1aaf1ca844e",
     "snapshot_date": "2026-10-02",
-    "flagship_product": "Social Built People",
-    "price_minima": null,
-    "price_maxima": null,
-    "price_median": null,
-    "pricing_tiers": [],
+    "flagship_product": "Mirlo Creator Subscriptions",
+    "price_minima": 0.0,
+    "price_maxima": 34.99,
+    "price_median": 17.5,
+    "pricing_tiers": [
+      "$ (14-Day Free Trial)",
+      "$99/mo (Creator Tier)"
+    ],
     "event_count": 0,
     "sentiment_score": 0.0,
-    "recorded_at": "2026-10-02T18:14:13.658427"
+    "recorded_at": "2026-10-11T06:42:45.521975"
   },
   {
     "id": "ac62d434-8576-4d73-b836-7858b1a8c59d_2026-10-02",
     "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
     "competitor_id": "ac62d434-8576-4d73-b836-7858b1a8c59d",
     "snapshot_date": "2026-10-02",
-    "flagship_product": "Raw Social",
-    "price_minima": null,
-    "price_maxima": null,
-    "price_median": null,
-    "pricing_tiers": [],
+    "flagship_product": "RAW Social Network",
+    "price_minima": 50.0,
+    "price_maxima": 52.73,
+    "price_median": 50.0,
+    "pricing_tiers": [
+      "$/mo (Standard Membership)",
+      "$73/mo (Pro Access)"
+    ],
     "event_count": 0,
     "sentiment_score": 0.0,
-    "recorded_at": "2026-10-02T18:14:14.169978"
+    "recorded_at": "2026-10-11T06:42:45.521980"
   },
   {
     "id": "2e13c12c-4328-4db2-82dc-8421de824d4f_2026-10-02",
     "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
     "competitor_id": "2e13c12c-4328-4db2-82dc-8421de824d4f",
     "snapshot_date": "2026-10-02",
-    "flagship_product": "Social Media",
-    "price_minima": null,
-    "price_maxima": null,
-    "price_median": null,
-    "pricing_tiers": [],
+    "flagship_product": "Sonnet Humans-Only App",
+    "price_minima": 0.0,
+    "price_maxima": 0.0,
+    "price_median": 0.0,
+    "pricing_tiers": [
+      "$ (Free App Store Client)"
+    ],
     "event_count": 0,
     "sentiment_score": 0.0,
-    "recorded_at": "2026-10-02T18:14:14.657767"
+    "recorded_at": "2026-10-11T06:42:45.521985"
   },
   {
     "id": "240050df-2747-4ab0-88fb-9a64d947ada2_2026-10-02",
     "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
     "competitor_id": "240050df-2747-4ab0-88fb-9a64d947ada2",
     "snapshot_date": "2026-10-02",
-    "flagship_product": "Traditional Social",
-    "price_minima": null,
-    "price_maxima": null,
-    "price_median": null,
-    "pricing_tiers": [],
+    "flagship_product": "Nos Nostr Protocol Client",
+    "price_minima": 0.0,
+    "price_maxima": 0.0,
+    "price_median": 0.0,
+    "pricing_tiers": [
+      " (Decentralized Nostr Protocol)"
+    ],
     "event_count": 0,
     "sentiment_score": 0.0,
-    "recorded_at": "2026-10-02T18:14:15.144808"
+    "recorded_at": "2026-10-11T06:42:45.521990"
+  },
+  {
+    "id": "7ca32a3c-23ea-4a87-9ac3-4b58198f42ad_2026-10-11",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "7ca32a3c-23ea-4a87-9ac3-4b58198f42ad",
+    "snapshot_date": "2026-10-11",
+    "flagship_product": "Sociano Ad-Free Pass",
+    "price_minima": 3.33,
+    "price_maxima": 39.99,
+    "price_median": 39.99,
+    "pricing_tiers": [
+      "$33/mo (Billed Annually)",
+      "$99/yr (Full Pass)"
+    ],
+    "event_count": 0,
+    "sentiment_score": 0.0,
+    "recorded_at": "2026-10-11T07:07:57.227496"
+  },
+  {
+    "id": "54f76ea1-2c0d-4d4c-bf7a-7f59e8fe3566_2026-10-11",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "54f76ea1-2c0d-4d4c-bf7a-7f59e8fe3566",
+    "snapshot_date": "2026-10-11",
+    "flagship_product": "Socia Organisations",
+    "price_minima": 0.0,
+    "price_maxima": 15.0,
+    "price_median": 15.0,
+    "pricing_tiers": [
+      "$ (Personal Account)",
+      "$/mo (Organisation Page)"
+    ],
+    "event_count": 0,
+    "sentiment_score": 0.0,
+    "recorded_at": "2026-10-11T07:07:58.523678"
+  },
+  {
+    "id": "46f4574f-7edf-4505-bff4-d1aaf1ca844e_2026-10-11",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "46f4574f-7edf-4505-bff4-d1aaf1ca844e",
+    "snapshot_date": "2026-10-11",
+    "flagship_product": "Mirlo Creator Subscriptions",
+    "price_minima": 0.0,
+    "price_maxima": 34.99,
+    "price_median": 17.5,
+    "pricing_tiers": [
+      "$ (14-Day Free Trial)",
+      "$99/mo (Creator Tier)"
+    ],
+    "event_count": 0,
+    "sentiment_score": 0.0,
+    "recorded_at": "2026-10-11T07:07:59.111415"
+  },
+  {
+    "id": "ac62d434-8576-4d73-b836-7858b1a8c59d_2026-10-11",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "ac62d434-8576-4d73-b836-7858b1a8c59d",
+    "snapshot_date": "2026-10-11",
+    "flagship_product": "RAW Social Premium",
+    "price_minima": 50.0,
+    "price_maxima": 52.73,
+    "price_median": 50.0,
+    "pricing_tiers": [
+      "$/mo (Standard Membership)",
+      "$73/mo (Pro Access)"
+    ],
+    "event_count": 0,
+    "sentiment_score": 0.0,
+    "recorded_at": "2026-10-11T07:07:59.359951"
+  },
+  {
+    "id": "ea1578b9-2a17-406d-a2b7-8669692664b5_2026-10-11",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "ea1578b9-2a17-406d-a2b7-8669692664b5",
+    "snapshot_date": "2026-10-11",
+    "flagship_product": "AltSocial Network",
+    "price_minima": 0.0,
+    "price_maxima": 25.0,
+    "price_median": 12.5,
+    "pricing_tiers": [
+      "$ (Free Member)",
+      "$/mo (Supporter)"
+    ],
+    "event_count": 0,
+    "sentiment_score": 0.0,
+    "recorded_at": "2026-10-11T07:07:59.918070"
+  },
+  {
+    "id": "ae5d7974-6902-4da3-8677-616aa1904fe5_2026-10-11",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "ae5d7974-6902-4da3-8677-616aa1904fe5",
+    "snapshot_date": "2026-10-11",
+    "flagship_product": "Mosaic Protocol",
+    "price_minima": 0.0,
+    "price_maxima": 0.0,
+    "price_median": 0.0,
+    "pricing_tiers": [
+      "$ (Free & Open Source / Public Good)"
+    ],
+    "event_count": 0,
+    "sentiment_score": 0.0,
+    "recorded_at": "2026-10-11T07:08:00.412216"
+  },
+  {
+    "id": "a48f1143-9d76-4a5a-895a-71e96f3245f5_2026-10-11",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "a48f1143-9d76-4a5a-895a-71e96f3245f5",
+    "snapshot_date": "2026-10-11",
+    "flagship_product": "GNU Social Platform",
+    "price_minima": 0.0,
+    "price_maxima": 0.0,
+    "price_median": 0.0,
+    "pricing_tiers": [
+      "$ (Free Software GPL)"
+    ],
+    "event_count": 0,
+    "sentiment_score": 0.0,
+    "recorded_at": "2026-10-11T07:08:00.963244"
+  },
+  {
+    "id": "9bcdc88f-d44a-452c-90fa-4c3f78b31f85_2026-10-11",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "9bcdc88f-d44a-452c-90fa-4c3f78b31f85",
+    "snapshot_date": "2026-10-11",
+    "flagship_product": "Communities Cooperative",
+    "price_minima": 0.0,
+    "price_maxima": 0.0,
+    "price_median": 0.0,
+    "pricing_tiers": [
+      " (Member-Owned Cooperative)"
+    ],
+    "event_count": 0,
+    "sentiment_score": 0.0,
+    "recorded_at": "2026-10-11T07:08:01.206858"
+  },
+  {
+    "id": "2e13c12c-4328-4db2-82dc-8421de824d4f_2026-10-11",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "2e13c12c-4328-4db2-82dc-8421de824d4f",
+    "snapshot_date": "2026-10-11",
+    "flagship_product": "Sonnet Humans-Only App",
+    "price_minima": 0.0,
+    "price_maxima": 0.0,
+    "price_median": 0.0,
+    "pricing_tiers": [
+      "$ (Free App Store Client)"
+    ],
+    "event_count": 0,
+    "sentiment_score": 0.0,
+    "recorded_at": "2026-10-11T07:08:01.449458"
+  },
+  {
+    "id": "240050df-2747-4ab0-88fb-9a64d947ada2_2026-10-11",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "240050df-2747-4ab0-88fb-9a64d947ada2",
+    "snapshot_date": "2026-10-11",
+    "flagship_product": "Nos Nostr Protocol Client",
+    "price_minima": 0.0,
+    "price_maxima": 0.0,
+    "price_median": 0.0,
+    "pricing_tiers": [
+      " (Decentralized Nostr Protocol)"
+    ],
+    "event_count": 0,
+    "sentiment_score": 0.0,
+    "recorded_at": "2026-10-11T07:08:01.693496"
   },
   {
     "id": "b8867623-541c-46a8-a1fc-e61bf019c666_2026-10-11",
     "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
     "competitor_id": "b8867623-541c-46a8-a1fc-e61bf019c666",
     "snapshot_date": "2026-10-11",
-    "flagship_product": "Jis College",
-    "price_minima": null,
-    "price_maxima": null,
-    "price_median": null,
-    "pricing_tiers": [],
+    "flagship_product": "JIS Academic Portal",
+    "price_minima": 0.0,
+    "price_maxima": 0.0,
+    "price_median": 0.0,
+    "pricing_tiers": [
+      " (Academic Institution)"
+    ],
     "event_count": 0,
     "sentiment_score": 0.0,
-    "recorded_at": "2026-10-11T06:10:41.673904"
+    "recorded_at": "2026-10-11T07:08:01.907131"
   }
 ]
