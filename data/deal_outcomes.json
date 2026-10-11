@@ -1,1 +1,106 @@
-[]
+[
+  {
+    "id": "deal_17001",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "54f76ea1-2c0d-4d4c-bf7a-7f59e8fe3566",
+    "competitor_name": "Socia",
+    "outcome": "WON",
+    "deal_value": 45000.0,
+    "primary_reason": "FEATURE_GAP",
+    "competitor_strength": "Low enterprise analytics",
+    "prospect_name": "Acme Media Corp",
+    "notes": "Buyer chose us for B2B moderation controls.",
+    "recorded_at": "2026-09-15T10:00:00"
+  },
+  {
+    "id": "deal_17002",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "54f76ea1-2c0d-4d4c-bf7a-7f59e8fe3566",
+    "competitor_name": "Socia",
+    "outcome": "LOST",
+    "deal_value": 62000.0,
+    "primary_reason": "PRICING",
+    "competitor_strength": "Offered /mo team pricing anchor",
+    "prospect_name": "Apex Digital Group",
+    "notes": "Lost on price; prospect chose cheaper self-serve tier.",
+    "recorded_at": "2026-09-22T14:30:00"
+  },
+  {
+    "id": "deal_17003",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "7ca32a3c-23ea-4a87-9ac3-4b58198f42ad",
+    "competitor_name": "Sociano",
+    "outcome": "LOST",
+    "deal_value": 85000.0,
+    "primary_reason": "PRICING",
+    "competitor_strength": "Flat annual pass (.99/yr) bundling",
+    "prospect_name": "Beacon Studios",
+    "notes": "Procurement felt our /mo tier was 2x Sociano.",
+    "recorded_at": "2026-09-28T11:15:00"
+  },
+  {
+    "id": "deal_17004",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "7ca32a3c-23ea-4a87-9ac3-4b58198f42ad",
+    "competitor_name": "Sociano",
+    "outcome": "WON",
+    "deal_value": 95000.0,
+    "primary_reason": "SECURITY_COMPLIANCE",
+    "competitor_strength": "Consumer-only focused",
+    "prospect_name": "FinTech Dynamics",
+    "notes": "Enterprise compliance and audit logs sealed the win.",
+    "recorded_at": "2026-10-01T09:45:00"
+  },
+  {
+    "id": "deal_17005",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "46f4574f-7edf-4505-bff4-d1aaf1ca844e",
+    "competitor_name": "Mirlo",
+    "outcome": "WON",
+    "deal_value": 52000.0,
+    "primary_reason": "FEATURE_GAP",
+    "competitor_strength": "Creator-only subscription focus",
+    "prospect_name": "Vanguard Publishing",
+    "notes": "Mirlo lacked team workspace permissions.",
+    "recorded_at": "2026-10-04T16:20:00"
+  },
+  {
+    "id": "deal_17006",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "54f76ea1-2c0d-4d4c-bf7a-7f59e8fe3566",
+    "competitor_name": "Socia",
+    "outcome": "LOST",
+    "deal_value": 78000.0,
+    "primary_reason": "PRICING",
+    "competitor_strength": "Aggressive 30% multi-year discount",
+    "prospect_name": "Global Creative Labs",
+    "notes": "Socia undercut our proposal by .",
+    "recorded_at": "2026-10-07T13:00:00"
+  },
+  {
+    "id": "deal_17007",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "ea1578b9-2a17-406d-a2b7-8669692664b5",
+    "competitor_name": "AltSocial",
+    "outcome": "WON",
+    "deal_value": 68000.0,
+    "primary_reason": "BRAND_REPUTATION",
+    "competitor_strength": "Niche supporter base",
+    "prospect_name": "Nexus Entertainment",
+    "notes": "Customer preferred our proven B2B uptime.",
+    "recorded_at": "2026-10-09T15:10:00"
+  },
+  {
+    "id": "deal_17008",
+    "company_id": "e38cd11d-06a3-4bce-a7a3-2bb3777f25ef",
+    "competitor_id": "ac62d434-8576-4d73-b836-7858b1a8c59d",
+    "competitor_name": "RAW Social",
+    "outcome": "LOST",
+    "deal_value": 50000.0,
+    "primary_reason": "FEATURE_GAP",
+    "competitor_strength": "Algorithm-free engagement tools",
+    "prospect_name": "Horizon Media",
+    "notes": "Client wanted RAW Social raw engagement feed.",
+    "recorded_at": "2026-10-10T12:00:00"
+  }
+]
